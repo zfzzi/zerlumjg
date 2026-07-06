@@ -15,22 +15,18 @@ const dockStylesSource = readFileSync(
   "utf8",
 );
 
-test("project heading row only renders on agent and hub views", () => {
+test("project heading row is removed from the tool-platform workspace", () => {
   assert.match(
     appSource,
-    /const showViewHeading = activeView === "agent" \|\| activeView === "hub";/,
+    /const showViewHeading = false;/,
   );
   assert.match(
     appSource,
     /className=\{`workspace-body \$\{[\s\S]*showViewHeading \? "with-view-heading" : "without-view-heading"[\s\S]*\}`\}/,
   );
-  assert.match(
-    appSource,
-    /\{showViewHeading && \(\s*<div className="view-heading">/,
-  );
   assert.doesNotMatch(
     appSource,
-    /<section className="workspace-body">\s*<div className="view-heading">/,
+    /const showViewHeading = activeView === "agent" \|\| activeView === "hub";/,
   );
 });
 
@@ -45,36 +41,23 @@ test("workspace body uses a single content row when the heading is hidden", () =
   );
 });
 
-test("workspace dock starts with a home button that returns to the welcome screen", () => {
-  assert.match(appSource, /function handleReturnHome\(\)/);
-  assert.match(appSource, /onReturnHome=\{handleReturnHome\}/);
-  assert.match(appSource, /onReturnHome: \(\) => void;/);
+test("workspace dock omits the home button", () => {
+  assert.doesNotMatch(appSource, /label: "主页"/);
+  assert.doesNotMatch(appSource, /onReturnHome=\{handleReturnHome\}/);
+  assert.doesNotMatch(appSource, /onReturnHome: \(\) => void;/);
   assert.match(
     appSource,
-    /const dockItems = useMemo<DockItemData\[\]>\(\s*\(\) =>\s*\[\s*\{\s*label: "主页",\s*onClick: onReturnHome,/,
+    /const dockItems = useMemo<DockItemData\[\]>\(\s*\(\) =>\s*navItems\.map/,
   );
 });
 
-test("home navigation shows welcome without erasing workspace state", () => {
+test("workspace no longer keeps home-navigation state", () => {
+  assert.doesNotMatch(appSource, /showWelcomeHome/);
+  assert.doesNotMatch(appSource, /setShowWelcomeHome/);
+  assert.doesNotMatch(appSource, /function handleReturnHome\(\)/);
   assert.match(
     appSource,
-    /const \[showWelcomeHome, setShowWelcomeHome\] = useState\(false\);/,
-  );
-  assert.match(
-    appSource,
-    /const shouldShowWelcome = showWelcomeHome \|\| !session \|\| !activeProject \|\| !currentMember;/,
-  );
-  assert.match(
-    appSource,
-    /function handleReturnHome\(\) {[\s\S]*?setShowWelcomeHome\(true\);[\s\S]*?setAuthOpen\(false\);[\s\S]*?setOnboardingOpen\(false\);[\s\S]*?}/,
-  );
-  assert.doesNotMatch(
-    appSource,
-    /function handleReturnHome\(\) {[\s\S]*?window\.localStorage\.removeItem\(STORAGE_KEY\)/,
-  );
-  assert.doesNotMatch(
-    appSource,
-    /function handleReturnHome\(\) {[\s\S]*?setProjects\(\[\]\)/,
+    /const shouldShowWelcome = !session \|\| !activeProject \|\| !currentMember;/,
   );
 });
 

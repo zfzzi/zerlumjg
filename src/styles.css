@@ -1368,6 +1368,13 @@ textarea::placeholder {
   margin-top: auto;
 }
 
+.agent-conversation-end {
+  width: 1px;
+  min-height: 1px;
+  flex: 0 0 1px;
+  pointer-events: none;
+}
+
 .agent-message {
   display: flex;
   width: fit-content;
@@ -1441,6 +1448,7 @@ textarea::placeholder {
 
 .agent-message-content {
   display: grid;
+  position: relative;
   width: fit-content;
   max-width: 100%;
   min-width: 0;
@@ -1449,6 +1457,7 @@ textarea::placeholder {
   border-radius: 16px;
   padding: 13px 15px;
   background: color-mix(in srgb, var(--surface-elevated) 84%, transparent);
+  user-select: text;
 }
 
 .agent-message.user .agent-message-content {
@@ -1469,11 +1478,64 @@ textarea::placeholder {
   line-height: 1.72;
 }
 
+.agent-message-text {
+  cursor: text;
+  user-select: text;
+}
+
+.agent-message-content.is-collapsed {
+  max-height: 260px;
+  overflow: hidden;
+}
+
+.agent-message-content.is-collapsed::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 72px;
+  border-radius: 0 0 16px 16px;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--surface-elevated) 94%, transparent)
+  );
+  content: "";
+}
+
+.agent-message-collapse-button {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-elevated) 78%, transparent);
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: var(--weight-medium);
+  user-select: none;
+  transition:
+    color 150ms ease,
+    border-color 150ms ease,
+    background 150ms ease;
+}
+
+.agent-message-collapse-button:hover {
+  border-color: color-mix(in srgb, var(--text) 24%, transparent);
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
 .agent-message-actions {
   display: flex;
   align-items: center;
   gap: 4px;
   margin-top: -2px;
+  user-select: none;
 }
 
 .agent-message-actions button {
@@ -3579,6 +3641,7 @@ textarea::placeholder {
   caret-color: var(--text);
   font-size: 0.78rem;
   line-height: 1.52;
+  overflow-y: auto;
   outline: 0;
   appearance: none;
 }
@@ -5063,6 +5126,31 @@ textarea {
   font-size: 0.72rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.document-upload-strip {
+  border-bottom: 1px solid var(--line);
+  padding: 12px 14px;
+}
+
+.document-upload-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--surface-elevated);
+  font-size: 0.86rem;
+  font-weight: var(--weight-semibold);
+}
+
+.document-upload-button:hover {
+  border-color: color-mix(in srgb, var(--text) 24%, transparent);
+  background: color-mix(in srgb, var(--surface-elevated) 82%, var(--text) 5%);
 }
 
 .document-outline-panel {

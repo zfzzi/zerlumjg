@@ -14,6 +14,10 @@ const panelBlock = appSource.slice(
   appSource.indexOf("function ProjectMaterialsPanel"),
   appSource.indexOf("function AgentComposer"),
 );
+const textViewBlock = appSource.slice(
+  appSource.indexOf("function TextView"),
+  appSource.indexOf("function ModalFrame"),
+);
 const agentSubmitBlock = appSource.slice(
   appSource.indexOf("async function handleAgentSubmit"),
   appSource.indexOf("function handleAgentVoiceSubmit"),
@@ -28,15 +32,23 @@ test("project materials panel can delete uploaded files", () => {
   assert.match(stylesSource, /\.material-delete-button/);
 });
 
-test("agent chat sends current project materials with the typed message", () => {
+test("text workspace exposes upload without displaying uploaded materials", () => {
+  assert.match(textViewBlock, /onUploadMaterials:\s*\(files: FileList \| File\[]\) => void/);
+  assert.match(textViewBlock, /className="document-upload-button"/);
+  assert.match(textViewBlock, /onClick=\{\(\) => documentUploadInputRef\.current\?\.click\(\)\}/);
+  assert.match(textViewBlock, /onChange=\{handleDocumentMaterialInputChange\}/);
+  assert.doesNotMatch(textViewBlock, /<ProjectMaterialsPanel/);
+  assert.doesNotMatch(textViewBlock, /materials=\{materials\}/);
+  assert.doesNotMatch(textViewBlock, /onDeleteMaterial:\s*\(materialId: string\) => void/);
+});
+
+test("zerlum agent chat sends current project materials without large data URLs", () => {
+  assert.match(agentSubmitBlock, /view:\s*"agent"/);
   assert.match(agentSubmitBlock, /message: requestMessage/);
   assert.match(
     agentSubmitBlock,
     /materials:\s*prepareAgentMaterialsForChat\(\s*projectMaterials\[activeProject\.id\] \?\? \[\],\s*\)/,
   );
-});
-
-test("agent chat does not send large material data URLs to the function", () => {
   assert.match(appSource, /function prepareAgentMaterialsForChat/);
   assert.match(
     appSource,

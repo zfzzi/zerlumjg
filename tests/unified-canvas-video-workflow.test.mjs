@@ -384,13 +384,21 @@ test("image prompt highlights selected @ mentions inline", () => {
   assert.match(stylesSource, /\.canvas-node-prompt-mention-token\s*{[\s\S]*font-weight:\s*var\(--weight-bold\)/);
 });
 
-test("image nodes can generate a night render prompt from canvas images", () => {
+test("image nodes generate prompts from canvas images without reading zerlum agent output", () => {
   assert.match(appSource, /async function generateCanvasNodePrompt/);
+  assert.doesNotMatch(appSource, /function extractLatestAgentImagePrompt/);
+  assert.doesNotMatch(appSource, /<UnifiedCanvasView[\s\S]*agentMessages=\{agentMessages\}/);
+  assert.doesNotMatch(appSource, /function UnifiedCanvasView\(\{[\s\S]*agentMessages,/);
+  assert.doesNotMatch(manualPromptFunction, /agentPrompt|agentMessages/);
   assert.match(appSource, /async function collectCanvasPromptImages/);
   assert.match(appSource, /getIncomingCanvasReferences\(node\.id\)/);
   assert.match(appSource, /getCanvasNodeMediaUrl\(reference\.node\)/);
   assert.match(appSource, /await resolveImageUrlForAgentApi\(imageUrl\)/);
   assert.match(appSource, /fetch\("\/api\/zerlum-prompt"/);
+  assert.match(
+    manualPromptFunction,
+    /const images = await collectCanvasPromptImages\(node\);[\s\S]*const finalPrompt = await requestCanvasGeneratedPrompt\(\{[\s\S]*node,[\s\S]*images,[\s\S]*fallbackPrompt: node\.prompt,[\s\S]*\}\);/,
+  );
   assert.match(appSource, /updateCanvasNodePrompt\(node\.id, finalPrompt, "generated"\)/);
   assert.match(appSource, /className="canvas-node-prompt-head"/);
   assert.match(appSource, /aria-label="一键生成提示词"/);
@@ -401,16 +409,24 @@ test("image nodes can generate a night render prompt from canvas images", () => 
 
 test("generated image prompts are marked so sending can skip prompt regeneration", () => {
   assert.match(appSource, /type CanvasPromptSource = "manual" \| "generated";/);
+  assert.doesNotMatch(appSource, /promptSource === "agent"/);
+  assert.doesNotMatch(appSource, /updateCanvasNodePrompt\([^)]*,\s*[^)]*,\s*"agent"\)/);
   assert.match(appSource, /promptSource\?: CanvasPromptSource;/);
   assert.match(
     appSource,
     /function updateCanvasNodePrompt\(\s*nodeId: string,\s*prompt: string,\s*promptSource: CanvasPromptSource = "manual",\s*\)/,
   );
   assert.match(manualPromptFunction, /updateCanvasNodePrompt\(node\.id, finalPrompt, "generated"\);/);
-  assert.match(imageGenerationFunction, /const shouldUseGeneratedPromptDirectly = node\.promptSource === "generated";/);
+  assert.match(appSource, /function canReuseCanvasPromptForImageGeneration/);
+  assert.match(appSource, /return promptSource === "generated";/);
+  assert.match(imageGenerationFunction, /const shouldUsePromptDirectly = canReuseCanvasPromptForImageGeneration\(node\.promptSource\);/);
   assert.match(
     imageGenerationFunction,
-    /const finalPrompt = shouldUseGeneratedPromptDirectly\s*\?\s*userPrompt\s*:\s*await requestCanvasGeneratedPrompt\(\{[\s\S]*node,[\s\S]*images: promptImages,[\s\S]*fallbackPrompt: userPrompt,[\s\S]*\}\);/,
+    /const finalPrompt = shouldUsePromptDirectly\s*\?\s*userPrompt\s*:\s*await requestCanvasGeneratedPrompt\(\{[\s\S]*node,[\s\S]*images: promptImages,[\s\S]*fallbackPrompt: userPrompt,[\s\S]*\}\);/,
+  );
+  assert.match(
+    imageGenerationFunction,
+    /if \(!shouldUsePromptDirectly\) \{[\s\S]*updateCanvasNodePrompt\(node\.id, finalPrompt, "generated"\);[\s\S]*\}/,
   );
 });
 
@@ -428,6 +444,39 @@ test("manual image prompt edits opt back into prompt regeneration", () => {
     /onPromptChange\(node\.id, event\.currentTarget\.value\)/,
   );
 });
+
+test("canvas prompt text area handles wheel scrolling inside the prompt box", () => {
+  assert.match(appSource, /function shouldLetEmbeddedInputHandleWheel\(target: EventTarget \| null\)/);
+  assert.match(appSource, /target\.closest\("textarea, input, select, \[contenteditable='true'\]"\)/);
+  assert.match(
+    appSource,
+    /if \(shouldLetEmbeddedInputHandleWheel\(event\.target\)\) \{[\s\S]*return;[\s\S]*\}[\s\S]*event\.preventDefault\(\);[\s\S]*zoomCanvas\(event\.deltaY, event\.clientX, event\.clientY\);/,
+  );
+  assert.match(canvasNodeCardSource, /const promptHighlightsRef = useRef<HTMLDivElement \| null>\(null\);/);
+  assert.match(
+    canvasNodeCardSource,
+    /function syncPromptHighlightScroll\(element: HTMLTextAreaElement\)/,
+  );
+  assert.match(
+    canvasNodeCardSource,
+    /promptHighlightsRef\.current\.scrollTop = element\.scrollTop;/,
+  );
+  assert.match(
+    canvasNodeCardSource,
+    /ref=\{promptHighlightsRef\}[\s\S]*className="canvas-node-prompt-highlights"/,
+  );
+  assert.match(
+    canvasNodeCardSource,
+    /onWheel=\{\(event\) => \{[\s\S]*event\.stopPropagation\(\);[\s\S]*syncPromptHighlightScroll\(event\.currentTarget\);[\s\S]*\}\}/,
+  );
+  assert.match(
+    canvasNodeCardSource,
+    /onScroll=\{\(event\) => syncPromptHighlightScroll\(event\.currentTarget\)\}/,
+  );
+  assert.match(stylesSource, /\.canvas-node-prompt-highlights\s*{[\s\S]*overflow:\s*hidden/);
+  assert.match(stylesSource, /\.canvas-node-prompt\s*{[\s\S]*overflow-y:\s*auto/);
+}
+);
 
 test("canvas prompt images include the main image without requiring reference images", () => {
   assert.match(appSource, /function getCanvasPromptImageReferences/);
@@ -479,7 +528,7 @@ test("image generation first refines the user prompt with source and reference i
   assert.match(appSource, /async function requestCanvasGeneratedPrompt/);
   assert.match(
     imageGenerationFunction,
-    /const finalPrompt = shouldUseGeneratedPromptDirectly\s*\?\s*userPrompt\s*:\s*await requestCanvasGeneratedPrompt\(\{[\s\S]*node,[\s\S]*images: promptImages,[\s\S]*fallbackPrompt: userPrompt,[\s\S]*\}\);/,
+    /const finalPrompt = shouldUsePromptDirectly\s*\?\s*userPrompt\s*:\s*await requestCanvasGeneratedPrompt\(\{[\s\S]*node,[\s\S]*images: promptImages,[\s\S]*fallbackPrompt: userPrompt,[\s\S]*\}\);/,
   );
   assert.match(
     imageGenerationFunction,
@@ -487,7 +536,7 @@ test("image generation first refines the user prompt with source and reference i
   );
   assert.match(appSource, /currentPrompt: fallbackPrompt,/);
   assert.match(manualPromptFunction, /updateCanvasNodePrompt\(node\.id, finalPrompt, "generated"\);/);
-  assert.doesNotMatch(imageGenerationFunction, /updateCanvasNodePrompt\(node\.id, finalPrompt\);/);
+  assert.match(imageGenerationFunction, /updateCanvasNodePrompt\(node\.id, finalPrompt, "generated"\);/);
   assert.match(imageGenerationFunction, /prompt: finalPrompt,/);
   assert.match(imageGenerationFunction, /outputText: "正在生成提示词..."/);
   const imageGenerationRequest = appSource.match(

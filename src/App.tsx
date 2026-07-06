@@ -22,25 +22,18 @@ import {
   Archive,
   ArrowClockwise,
   ArrowUp,
-  BookOpenText,
-  ChartBar,
   ChatCircleText,
   CheckCircle,
   ClipboardText,
   CopySimple,
-  CurrencyDollar,
-  Database,
   DownloadSimple,
   FilePdf,
   FileText,
-  FolderOpen,
-  Gauge,
   Image as ImageIcon,
   LinkSimple,
   MagnifyingGlassPlus,
   Microphone,
   Moon,
-  Package,
   PaperPlaneTilt,
   PlusCircle,
   Scissors,
@@ -55,7 +48,6 @@ import {
   UploadSimple,
   User,
   UserCircle,
-  UsersThree,
   VideoCamera,
   X,
 } from "@phosphor-icons/react";
@@ -63,7 +55,6 @@ import Dock, { type DockItemData } from "./components/Dock";
 import DropdownSelect from "./components/DropdownSelect";
 import { LiquidMetalButton } from "./components/LiquidMetalButton";
 import Prism from "./components/Prism";
-import desktopKnowledgeIndexJson from "../knowledge/desktop-lighting-library/markdown-index.json";
 
 type AuthMode = "login" | "register";
 type ThemeMode = "dark" | "light";
@@ -78,12 +69,7 @@ type MemberRole =
 type WorkspaceView =
   | "agent"
   | "canvas"
-  | "text"
-  | "fixture"
-  | "database"
-  | "knowledge"
-  | "quote"
-  | "hub";
+  | "text";
 
 type Profile = {
   username: string;
@@ -121,41 +107,6 @@ type ProjectMaterial = {
   sourceDataUrl?: string;
   sourceText?: string;
   sourceMimeType?: string;
-};
-
-type ProjectKnowledgeMaterial = ProjectMaterial & {
-  projectName: string;
-};
-
-type DesktopMarkdownDocument = {
-  id: string;
-  title: string;
-  sourcePath: string;
-  relativePath: string;
-  sourceType: string;
-  collection: string;
-  platformViews: WorkspaceView[];
-  agentRoutes: string[];
-  privacyLevel: string;
-  trust: string;
-  knowledgeLevel: string | null;
-  importance: string | null;
-  byteLength: number;
-  modifiedAt: string;
-  headings: string[];
-  keywords: string[];
-  needsAudit: boolean;
-  standardStatus: string;
-  chunkCount: number;
-};
-
-type DesktopKnowledgeIndex = {
-  generatedAt: string;
-  sourceRoot: string;
-  documentCount: number;
-  chunkCount: number;
-  collectionCounts: Record<string, number>;
-  documents: DesktopMarkdownDocument[];
 };
 
 type ProjectDraft = {
@@ -200,7 +151,6 @@ type PersistedState = {
   session: Session | null;
   projects: Project[];
   projectMaterials: Record<string, ProjectMaterial[]>;
-  knowledgeMaterials: ProjectMaterial[];
   activeProjectId: string;
   members: TeamMember[];
   currentMemberId: string;
@@ -216,88 +166,6 @@ const navItems: NavItem[] = [
   { id: "agent", label: "zerlum agent", icon: ChatCircleText },
   { id: "canvas", label: "AI无限画布", icon: ImageIcon },
   { id: "text", label: "文本制作", icon: FileText },
-  { id: "fixture", label: "灯具库", icon: Package },
-  { id: "database", label: "数据库", icon: Database },
-  { id: "knowledge", label: "知识库", icon: BookOpenText },
-  { id: "quote", label: "灯具报价", icon: CurrencyDollar },
-  { id: "hub", label: "协同中枢", icon: UsersThree },
-];
-
-const desktopKnowledgeIndex =
-  desktopKnowledgeIndexJson as DesktopKnowledgeIndex;
-
-const markdownCollectionLabels: Record<string, string> = {
-  "calculation-tools": "计算与工具",
-  "design-methods": "照明设计方法",
-  "design-techniques": "表现技法",
-  "fixture-systems": "灯具系统",
-  "light-sources": "光源技术",
-  "lighting-theory": "基础理论",
-  "product-library": "产品资料",
-  "project-cases": "项目案例",
-  "standards-audit": "标准与规范待审",
-};
-
-const markdownViewLabels: Partial<Record<WorkspaceView, string>> = {
-  agent: "Agent",
-  canvas: "AI画布",
-  database: "数据库",
-  fixture: "灯具库",
-  hub: "协同中枢",
-  knowledge: "知识库",
-  quote: "报价",
-  text: "文本制作",
-};
-
-const markdownAgentLabels: Record<string, string> = {
-  "emergency-lighting": "消防应急照明",
-  "fixture-compliance": "灯具产品合规",
-  "indoor-lighting": "室内建筑照明",
-  "lighting-foundation": "照明基础与规范",
-  "lighting-visualization": "效果图与视觉表达",
-  "outdoor-landscape-lighting": "室外景观夜景",
-  "road-tunnel-lighting": "道路与隧道照明",
-  "scheme-case-research": "方案案例研究",
-};
-
-type DatabaseAsset = {
-  id: string;
-  name: string;
-  sourceLabel: string;
-  recordCount: string;
-  updatedAt: string;
-  fields: string[];
-  agentUse: string;
-};
-
-const existingDatabaseAssets: DatabaseAsset[] = [
-  {
-    id: "database-existing-case-index",
-    name: "相似案例索引",
-    sourceLabel: "数据库表",
-    recordCount: "36 条案例",
-    updatedAt: "已同步",
-    fields: ["项目类型", "空间标签", "预算区间", "方案结果"],
-    agentUse: "用于按项目类型和场景关键词匹配可参考案例。",
-  },
-  {
-    id: "database-existing-fixture-index",
-    name: "灯具参数索引",
-    sourceLabel: "数据库表",
-    recordCount: "128 条参数",
-    updatedAt: "已同步",
-    fields: ["型号", "功率", "色温", "光束角"],
-    agentUse: "用于报价、选型和方案文本中的参数校验。",
-  },
-  {
-    id: "database-existing-budget-table",
-    name: "项目预算区间表",
-    sourceLabel: "数据库表",
-    recordCount: "18 条规则",
-    updatedAt: "已同步",
-    fields: ["空间类型", "成本级别", "控制系统", "安装预估"],
-    agentUse: "用于在方案和报价之间统一成本判断口径。",
-  },
 ];
 
 type AgentAttachment = {
@@ -492,6 +360,7 @@ const AGENT_IMAGE_MAX_BYTES = 900_000;
 const AGENT_IMAGE_MAX_SIDE = 1280;
 const AGENT_IMAGE_START_QUALITY = 0.82;
 const AGENT_IMAGE_MIN_QUALITY = 0.5;
+const AGENT_MESSAGE_COLLAPSE_LENGTH = 1200;
 const CANVAS_VIDEO_UPLOAD_MAX_MB = 20;
 const CANVAS_VIDEO_UPLOAD_MAX_BYTES = CANVAS_VIDEO_UPLOAD_MAX_MB * 1024 * 1024;
 const canvasZoomMin = 0.35;
@@ -565,6 +434,10 @@ function extractAgentStreamText(data: string) {
 }
 
 function getAgentStreamErrorMessage(error: unknown) {
+  if (typeof error === "string") {
+    return error;
+  }
+
   if (!error || typeof error !== "object") {
     return "";
   }
@@ -578,6 +451,35 @@ function getAgentStreamErrorMessage(error: unknown) {
   }
 
   return message || code;
+}
+
+function parseApiErrorText(rawText: string, fallback: string) {
+  const text = rawText.trim();
+
+  if (!text) {
+    return fallback;
+  }
+
+  try {
+    const payload = JSON.parse(rawText) as Record<string, unknown>;
+    const payloadError = getAgentStreamErrorMessage(payload.error);
+
+    if (payloadError) {
+      return payloadError;
+    }
+
+    if (typeof payload.message === "string") {
+      return payload.message;
+    }
+
+    if (typeof payload.msg === "string") {
+      return payload.msg;
+    }
+  } catch {
+    return text;
+  }
+
+  return fallback;
 }
 
 function extractAgentStreamError(data: string) {
@@ -603,6 +505,17 @@ function extractAgentStreamError(data: string) {
   }
 
   return "";
+}
+
+function canReuseCanvasPromptForImageGeneration(promptSource?: CanvasPromptSource) {
+  return promptSource === "generated";
+}
+
+function shouldLetEmbeddedInputHandleWheel(target: EventTarget | null) {
+  return (
+    target instanceof HTMLElement &&
+    Boolean(target.closest("textarea, input, select, [contenteditable='true']"))
+  );
 }
 
 function readBlobAsDataUrl(blob: Blob) {
@@ -1091,10 +1004,8 @@ const STORAGE_KEY = "zerlum-mvp-workspace";
 const MAX_AVATAR_IMAGE_SIZE = 256;
 const memberRoles: MemberRole[] = [
   "管理员",
-  "项目负责人",
   "照明设计师",
   "效果图设计",
-  "商务报价",
   "访客",
 ];
 const memberRoleOptions = memberRoles.map((role) => ({
@@ -1103,11 +1014,11 @@ const memberRoleOptions = memberRoles.map((role) => ({
 }));
 
 const roleDescriptions: Record<MemberRole, string> = {
-  管理员: "管理成员、分配 token、创建和编辑项目、导出交付物。",
-  项目负责人: "推动方案、审批内容，但不能创建项目或分配 token。",
-  照明设计师: "使用 Agent、知识库、画布和灯具库完成设计工作。",
+  管理员: "创建和编辑项目、生成效果图、视频和方案交付物。",
+  项目负责人: "推动方案生成和内容审批。",
+  照明设计师: "使用 AI 无限画布和文本制作完成效果图、视频和方案生成。",
   效果图设计: "使用画布和视频模块，查看项目资料。",
-  商务报价: "维护灯具清单、报价和成本导出。",
+  商务报价: "查看项目资料并导出方案交付内容。",
   访客: "只读查看项目内容，不能生成或修改核心资产。",
 };
 
@@ -1332,286 +1243,8 @@ function formatChineseDate(value: string) {
   )}`;
 }
 
-function getMarkdownCollectionLabel(collection: string) {
-  return markdownCollectionLabels[collection] ?? collection;
-}
-
-function getMarkdownAgentLabels(routes: string[]) {
-  if (routes.length === 0) {
-    return "未指定专项 Agent";
-  }
-
-  return routes.map((route) => markdownAgentLabels[route] ?? route).join("、");
-}
-
-function getMarkdownViewLabels(views: WorkspaceView[]) {
-  if (views.length === 0) {
-    return "知识库";
-  }
-
-  return views.map((view) => markdownViewLabels[view] ?? view).join("、");
-}
-
-function getMarkdownFolderPath(document: DesktopMarkdownDocument) {
-  const parts = document.relativePath.split("/").filter(Boolean);
-
-  if (parts.length <= 1) {
-    return "根目录";
-  }
-
-  return parts.slice(0, -1).join("/");
-}
-
-const localKnowledgeIndexFolder =
-  "C:\\Users\\43490\\Documents\\zerlum\\knowledge\\desktop-lighting-library";
-
-function joinLocalKnowledgePath(root: string, relativePath = "") {
-  const trimmedRoot = root.replace(/[\\/]+$/, "");
-  const normalizedRelative = relativePath
-    .split("/")
-    .filter(Boolean)
-    .join("\\");
-
-  return normalizedRelative
-    ? `${trimmedRoot}\\${normalizedRelative}`
-    : trimmedRoot;
-}
-
-function getMarkdownDocumentLocalFolder(document: DesktopMarkdownDocument) {
-  const folder = getMarkdownFolderPath(document);
-
-  return folder === "根目录"
-    ? desktopKnowledgeIndex.sourceRoot
-    : joinLocalKnowledgePath(desktopKnowledgeIndex.sourceRoot, folder);
-}
-
-function getMarkdownCollectionLocalFolder(documents: DesktopMarkdownDocument[]) {
-  const [firstDocument] = documents;
-  const rootFolder = firstDocument?.relativePath.split("/").filter(Boolean)[0];
-
-  return rootFolder
-    ? joinLocalKnowledgePath(desktopKnowledgeIndex.sourceRoot, rootFolder)
-    : desktopKnowledgeIndex.sourceRoot;
-}
-
-function getMarkdownCollectionFolder(documents: DesktopMarkdownDocument[]) {
-  const folderRoots = [
-    ...new Set(
-      documents
-        .map((document) => document.relativePath.split("/")[0])
-        .filter(Boolean),
-    ),
-  ];
-
-  return folderRoots.join("、") || "根目录";
-}
-
-async function openLocalFolder(folderPath: string) {
-  try {
-    const response = await fetch("/api/open-local-folder", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ path: folderPath }),
-    });
-
-    if (!response.ok) {
-      const payload = (await response.json().catch(() => ({}))) as {
-        error?: string;
-      };
-      window.alert(payload.error ?? "无法打开本地文件夹");
-    }
-  } catch {
-    window.alert("无法连接本地文件夹打开服务");
-  }
-}
-
-function matchesMarkdownDocument(document: DesktopMarkdownDocument, query: string) {
-  if (!query) {
-    return true;
-  }
-
-  const searchable = [
-    document.title,
-    document.relativePath,
-    document.collection,
-    getMarkdownCollectionLabel(document.collection),
-    ...document.agentRoutes,
-    ...document.headings,
-    ...document.keywords,
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  return searchable.includes(query);
-}
-
-function getMarkdownKnowledgePoints(document: DesktopMarkdownDocument) {
-  const headings = document.headings
-    .filter((heading) => !["必须掌握", "需要理解", "了解即可"].includes(heading))
-    .slice(0, 4);
-
-  if (headings.length > 0) {
-    return headings.join("、");
-  }
-
-  return document.keywords.slice(0, 4).join("、") || "待生成知识要点";
-}
-
-function getMarkdownRequirementText(document: DesktopMarkdownDocument) {
-  if (document.needsAudit || document.collection === "standards-audit") {
-    return "规范要求：待现行版本审计，引用前必须核验标准原文、地方要求和项目审图口径。";
-  }
-
-  if (document.collection === "fixture-systems" || document.collection === "product-library") {
-    return "要求：涉及产品安全、能效、认证或检测报告时，需交由灯具合规 Agent 复核。";
-  }
-
-  if (document.collection === "project-cases") {
-    return "要求：案例只能作为方法和表达参考，不直接等同于当前项目可落地结论。";
-  }
-
-  return "知识资料：可作为方案理解、问答检索和文本生成的内部知识依据。";
-}
-
-function getKnowledgeFileTypeLabel(type: string, name: string) {
-  const normalizedType = type.toLowerCase();
-  const extension = getMaterialExtension(name);
-
-  if (normalizedType.includes("pdf") || extension === "pdf") {
-    return "PDF 文档";
-  }
-
-  if (["doc", "docx"].includes(extension) || normalizedType.includes("word")) {
-    return "文字文档";
-  }
-
-  if (
-    ["xls", "xlsx", "csv"].includes(extension) ||
-    normalizedType.includes("spreadsheet") ||
-    normalizedType.includes("excel")
-  ) {
-    return "表格文件";
-  }
-
-  if (
-    ["ppt", "pptx"].includes(extension) ||
-    normalizedType.includes("presentation")
-  ) {
-    return "演示文稿";
-  }
-
-  if (normalizedType.startsWith("image/")) {
-    return "图片文件";
-  }
-
-  if (normalizedType.startsWith("video/")) {
-    return "视频文件";
-  }
-
-  if (normalizedType.startsWith("audio/")) {
-    return "音频文件";
-  }
-
-  if (["txt", "md"].includes(extension) || normalizedType.startsWith("text/")) {
-    return "文本文件";
-  }
-
-  if (extension) {
-    return `${extension.toUpperCase()} 文件`;
-  }
-
-  return "未识别文件";
-}
-
 function getMaterialExtension(name: string) {
   return name.split(".").pop()?.toLowerCase() ?? "";
-}
-
-function isStructuredProjectMaterial(material: Pick<ProjectMaterial, "name" | "type">) {
-  const normalizedType = material.type.toLowerCase();
-  const extension = getMaterialExtension(material.name);
-  const structuredExtensions = new Set([
-    "csv",
-    "db",
-    "json",
-    "sqlite",
-    "sql",
-    "xls",
-    "xlsx",
-  ]);
-  const structuredKeywords = [
-    "表",
-    "表格",
-    "参数",
-    "清单",
-    "台账",
-    "数据库",
-    "点位",
-    "回路",
-    "报价",
-    "预算",
-    "明细",
-  ];
-
-  return (
-    structuredExtensions.has(extension) ||
-    normalizedType.includes("csv") ||
-    normalizedType.includes("json") ||
-    normalizedType.includes("spreadsheet") ||
-    normalizedType.includes("excel") ||
-    structuredKeywords.some((keyword) => material.name.includes(keyword))
-  );
-}
-
-function isKnowledgeMaterial(material: Pick<ProjectMaterial, "name" | "type">) {
-  return !isStructuredProjectMaterial(material);
-}
-
-function buildProjectDatabaseAssets(
-  project: Project,
-  projectMaterials: ProjectMaterial[],
-  allProjectMaterials: ProjectKnowledgeMaterial[],
-) {
-  const structuredMaterials =
-    allProjectMaterials.length > 0
-      ? allProjectMaterials.filter(isStructuredProjectMaterial)
-      : projectMaterials.filter(isStructuredProjectMaterial);
-  const projectMaterialCount = projectMaterials.length;
-
-  return [
-    {
-      id: "database-current-project-profile",
-      name: "当前项目基础信息",
-      sourceLabel: "项目数据库",
-      recordCount: "4 个字段",
-      updatedAt: project.updatedAt,
-      fields: ["项目名称", "项目类型", "客户名称", "项目阶段"],
-      agentUse: "用于识别当前任务上下文，并限制方案、报价和检索范围。",
-    },
-    {
-      id: "database-current-material-index",
-      name: "项目资料索引",
-      sourceLabel: "项目数据库",
-      recordCount: `${projectMaterialCount} 个文件`,
-      updatedAt: project.updatedAt,
-      fields: ["资料名称", "资料格式", "上传时间", "所属项目"],
-      agentUse: "用于先定位资料归属，再把文档资料交给知识库检索。",
-    },
-    ...structuredMaterials.map((material) => ({
-      id: `database-material-${material.id}`,
-      name: material.name,
-      sourceLabel: "结构化项目资料",
-      recordCount: "待解析字段",
-      updatedAt: material.uploadedAt,
-      fields: ["文件名", "格式", "大小", "上传时间"],
-      agentUse:
-        material.agentUse ??
-        "作为数据库表格导入后，用于报价、空间清单和灯具参数查询。",
-    })),
-    ...existingDatabaseAssets,
-  ] satisfies DatabaseAsset[];
 }
 
 function formatUploadTime(date = new Date()) {
@@ -1793,7 +1426,7 @@ function sanitizePersistedSession(session: Session | null | undefined) {
     collaboration: {
       ...session.collaboration,
       workflowName: seededWorkflowName
-        ? "Zerlum 工作流"
+        ? "Zerlum 工具台"
         : session.collaboration.workflowName,
     },
   } satisfies Session;
@@ -1844,7 +1477,6 @@ function normalizePersistedState(
       : null,
     projects,
     projectMaterials,
-    knowledgeMaterials: state.knowledgeMaterials ?? [],
     activeProjectId: projectIds.has(state.activeProjectId ?? "")
       ? (state.activeProjectId ?? "")
       : (projects[0]?.id ?? ""),
@@ -2123,7 +1755,6 @@ function App() {
   const [theme, setTheme] = useState<ThemeMode>(persisted.theme ?? "dark");
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
-  const [showWelcomeHome, setShowWelcomeHome] = useState(false);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [onboardingStep, setOnboardingStep] =
     useState<OnboardingStep>("choose");
@@ -2139,9 +1770,6 @@ function App() {
   const [projectMaterials, setProjectMaterials] = useState<
     Record<string, ProjectMaterial[]>
   >(persisted.projectMaterials ?? {});
-  const [knowledgeMaterials, setKnowledgeMaterials] = useState<ProjectMaterial[]>(
-    persisted.knowledgeMaterials ?? [],
-  );
   const [activeProjectId, setActiveProjectId] = useState(
     persisted.activeProjectId ?? "",
   );
@@ -2198,16 +1826,10 @@ function App() {
     type: "",
     client: "",
   });
-  const [newMemberDraft, setNewMemberDraft] = useState({
-    name: "",
-    role: "照明设计师" as MemberRole,
-    total: 18000,
-  });
   const [profileOpen, setProfileOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [agentMessages, setAgentMessages] = useState<AgentChatMessage[]>([]);
   const [agentStatus, setAgentStatus] = useState<AgentStreamStatus>("idle");
-  const [hubInput, setHubInput] = useState("");
 
   const currentNav = useMemo(
     () => navItems.find((item) => item.id === activeView) ?? navItems[0],
@@ -2215,16 +1837,7 @@ function App() {
   );
   const activeProject =
     projects.find((project) => project.id === activeProjectId) ?? projects[0];
-  const allProjectKnowledgeMaterials = useMemo<ProjectKnowledgeMaterial[]>(
-    () =>
-      projects.flatMap((project) =>
-        (projectMaterials[project.id] ?? []).map((material) => ({
-          ...material,
-          projectName: project.name || "未命名项目",
-        })),
-      ),
-    [projectMaterials, projects],
-  );
+
   const currentMember =
     members.find((member) => member.id === currentMemberId) ?? members[0];
   const permissions = getPermissions(currentMember?.role ?? "访客");
@@ -2240,7 +1853,6 @@ function App() {
       session,
       projects,
       projectMaterials: stripProjectMaterialSourcesForPersistence(projectMaterials),
-      knowledgeMaterials,
       activeProjectId: activeProject.id,
       members,
       currentMemberId: currentMember.id,
@@ -2251,7 +1863,6 @@ function App() {
     activeView,
     currentMember,
     currentMemberId,
-    knowledgeMaterials,
     members,
     projects,
     projectMaterials,
@@ -2289,13 +1900,13 @@ function App() {
     setProfileDraft((current) => ({
       ...current,
       username: joinDraft.username || current.username,
-      role: joinDraft.role || "成员",
+      role: joinDraft.role || "照明设计师",
       avatarLabel: joinDraft.avatarLabel,
       avatarUrl: joinDraft.avatarUrl,
     }));
     setWorkflowDraft((current) => ({
       ...current,
-      workflowName: `已加入合作 ${code}`,
+      workflowName: `已打开项目空间 ${code}`,
     }));
     setGeneratedCode(code);
     setOnboardingStep("project");
@@ -2446,57 +2057,6 @@ function App() {
     );
   }
 
-  function handleMemberRoleChange(memberId: string, role: MemberRole) {
-    if (!permissions.canManageMembers) {
-      return;
-    }
-
-    setMembers((current) =>
-      current.map((member) =>
-        member.id === memberId ? { ...member, role } : member,
-      ),
-    );
-  }
-
-  function handleMemberTokenChange(memberId: string, total: number) {
-    if (!permissions.canAllocateTokens) {
-      return;
-    }
-
-    setMembers((current) =>
-      current.map((member) =>
-        member.id === memberId
-          ? { ...member, total: Math.max(member.used, total) }
-          : member,
-      ),
-    );
-  }
-
-  function handleAddMember(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!permissions.canManageMembers) {
-      return;
-    }
-
-    const nextMember: TeamMember = {
-      id: createId("member"),
-      name: newMemberDraft.name || "新成员",
-      role: newMemberDraft.role,
-      phone: "",
-      email: "",
-      avatarLabel: "默认头像",
-      used: 0,
-      total: Math.max(1000, newMemberDraft.total),
-      status: "待审核",
-    };
-    setMembers((current) => [...current, nextMember]);
-    setNewMemberDraft({
-      name: "",
-      role: "照明设计师",
-      total: 18000,
-    });
-  }
-
   async function handleProjectMaterialsUpload(
     projectId: string,
     fileList: FileList | File[],
@@ -2631,7 +2191,7 @@ function App() {
 
       if (!response.ok || !response.body) {
         const fallback = await response.text();
-        throw new Error(fallback || "Zerlum Agent 暂时无法响应。");
+        throw new Error(parseApiErrorText(fallback, "Zerlum Agent 暂时无法响应。"));
       }
 
       const reader = response.body.getReader();
@@ -2747,17 +2307,8 @@ function App() {
     void handleAgentSubmit(voiceInput, textInstruction);
   }
 
-  function handleReturnHome() {
-    setShowWelcomeHome(true);
-    setAuthOpen(false);
-    setOnboardingOpen(false);
-    setNewProjectOpen(false);
-    setProjectEditOpen(false);
-    setProfileOpen(false);
-  }
-
   const appClass = `app-shell ${theme === "dark" ? "theme-dark" : "theme-light"}`;
-  const shouldShowWelcome = showWelcomeHome || !session || !activeProject || !currentMember;
+  const shouldShowWelcome = !session || !activeProject || !currentMember;
 
   return (
     <main className={appClass}>
@@ -2768,7 +2319,6 @@ function App() {
           }
           onOpenLogin={() => {
             if (session && activeProject && currentMember) {
-              setShowWelcomeHome(false);
               return;
             }
 
@@ -2784,8 +2334,6 @@ function App() {
           project={activeProject}
           projects={projects}
           projectMaterials={projectMaterials[activeProject.id] ?? []}
-          allProjectMaterials={allProjectKnowledgeMaterials}
-          knowledgeMaterials={knowledgeMaterials}
           members={members}
           currentMember={currentMember}
           permissions={permissions}
@@ -2793,23 +2341,15 @@ function App() {
           chatInput={chatInput}
           agentMessages={agentMessages}
           agentStatus={agentStatus}
-          hubInput={hubInput}
-          onReturnHome={handleReturnHome}
           onViewChange={setActiveView}
           onProjectChange={setActiveProjectId}
           onProjectMaterialsUpload={(files) =>
             handleProjectMaterialsUpload(activeProject.id, files)
           }
           onProjectMaterialDelete={handleProjectMaterialDelete}
-          onKnowledgeMaterialsChange={setKnowledgeMaterials}
           onOpenProjectEdit={openProjectEdit}
           onOpenNewProject={() => setNewProjectOpen(true)}
           onCurrentMemberChange={setCurrentMemberId}
-          onMemberRoleChange={handleMemberRoleChange}
-          onMemberTokenChange={handleMemberTokenChange}
-          newMemberDraft={newMemberDraft}
-          onNewMemberDraftChange={setNewMemberDraft}
-          onAddMember={handleAddMember}
           onThemeToggle={() =>
             setTheme((current) => (current === "dark" ? "light" : "dark"))
           }
@@ -2817,7 +2357,6 @@ function App() {
           onChatInput={setChatInput}
           onAgentSubmit={handleAgentSubmit}
           handleAgentVoiceSubmit={handleAgentVoiceSubmit}
-          onHubInput={setHubInput}
         />
       )}
 
@@ -3013,7 +2552,7 @@ function AuthDialog({
         <img src="/brand/zerlum-logo-mark.png" alt="Zerlum" />
         <div>
           <h3>Welcome Zerlum</h3>
-          <p>登录或注册后进入协同工作台。</p>
+          <p>登录或注册后进入照明设计工具台。</p>
         </div>
       </div>
       <div className="segmented-control" role="tablist" aria-label="登录方式">
@@ -3131,8 +2670,8 @@ function OnboardingDialog({
 }) {
   const titles: Record<OnboardingStep, string> = {
     choose: "选择创作方式",
-    create: "创建合作",
-    join: "加入合作",
+    create: "创建项目空间",
+    join: "打开项目空间",
     solo: "独自创作",
     project: "新建项目",
   };
@@ -3143,20 +2682,20 @@ function OnboardingDialog({
         <div className="choice-grid">
           <ChoiceButton
             icon={PlusCircle}
-            title="创建合作"
-            text="生成协作码，创建管理员资料，并邀请团队进入同一个项目工作流。"
+            title="创建项目空间"
+            text="创建照明设计项目资料，进入效果图、视频和方案生成工具。"
             onClick={onChooseCreate}
           />
           <ChoiceButton
             icon={LinkSimple}
-            title="加入合作"
-            text="输入 10 位英文协作码，创建个人资料后进入已有工作流。"
+            title="打开项目空间"
+            text="输入 10 位项目码，打开已有项目资料和生成记录。"
             onClick={onChooseJoin}
           />
           <ChoiceButton
             icon={User}
             title="独自创作"
-            text="为个人设计师开启完整 Agent 工作台，保留后续转协作空间的能力。"
+            text="为个人设计师开启完整照明设计工具台。"
             onClick={onChooseSolo}
           />
         </div>
@@ -3165,9 +2704,9 @@ function OnboardingDialog({
       {step === "create" && (
         <form className="form-grid" onSubmit={onCreateSubmit}>
           <section className="form-panel">
-            <h3>工作流信息</h3>
+            <h3>项目空间信息</h3>
             <LabelledInput
-              label="工作流名称"
+              label="项目空间名称"
               value={workflowDraft.workflowName}
               onChange={(workflowName) =>
                 onWorkflowChange({ ...workflowDraft, workflowName })
@@ -3188,7 +2727,7 @@ function OnboardingDialog({
               }
             />
             <div className="code-box">
-              <span>协作码</span>
+              <span>项目码</span>
               <strong>{code}</strong>
             </div>
           </section>
@@ -3226,7 +2765,7 @@ function OnboardingDialog({
       {step === "join" && (
         <form className="form-grid" onSubmit={onJoinSubmit}>
           <section className="form-panel">
-            <h3>输入协作码</h3>
+            <h3>输入项目码</h3>
             <LabelledInput
               label="10 位英文大小写字母"
               value={joinDraft.code}
@@ -3236,7 +2775,7 @@ function OnboardingDialog({
               maxLength={10}
             />
             <p className="fine-print">
-              原型中任意 10 位协作码都可继续。正式版会校验有效期、成员上限和管理员批准。
+              原型中任意 10 位项目码都可继续。正式版会校验有效期和项目权限。
             </p>
           </section>
           <section className="form-panel">
@@ -3449,11 +2988,11 @@ function UserProfileDialog({
             <strong>{member.phone || session.profile.phone || "未填写"}</strong>
           </div>
           <div>
-            <span>所在工作流</span>
+            <span>当前空间</span>
             <strong>{session.collaboration.workflowName}</strong>
           </div>
           <div>
-            <span>协作码</span>
+            <span>项目码</span>
             <strong>{session.collaboration.code}</strong>
           </div>
         </div>
@@ -3487,8 +3026,6 @@ function Workspace({
   project,
   projects,
   projectMaterials,
-  allProjectMaterials,
-  knowledgeMaterials,
   members,
   currentMember,
   permissions,
@@ -3496,27 +3033,18 @@ function Workspace({
   chatInput,
   agentMessages,
   agentStatus,
-  hubInput,
-  onReturnHome,
   onViewChange,
   onProjectChange,
   onProjectMaterialsUpload,
   onProjectMaterialDelete,
-  onKnowledgeMaterialsChange,
   onOpenProjectEdit,
   onOpenNewProject,
   onCurrentMemberChange,
-  onMemberRoleChange,
-  onMemberTokenChange,
-  newMemberDraft,
-  onNewMemberDraftChange,
-  onAddMember,
   onThemeToggle,
   onOpenProfile,
   onChatInput,
   onAgentSubmit,
   handleAgentVoiceSubmit,
-  onHubInput,
 }: {
   activeView: WorkspaceView;
   currentNav: NavItem;
@@ -3524,8 +3052,6 @@ function Workspace({
   project: Project;
   projects: Project[];
   projectMaterials: ProjectMaterial[];
-  allProjectMaterials: ProjectKnowledgeMaterial[];
-  knowledgeMaterials: ProjectMaterial[];
   members: TeamMember[];
   currentMember: TeamMember;
   permissions: Permissions;
@@ -3533,25 +3059,13 @@ function Workspace({
   chatInput: string;
   agentMessages: AgentChatMessage[];
   agentStatus: AgentStreamStatus;
-  hubInput: string;
-  onReturnHome: () => void;
   onViewChange: (view: WorkspaceView) => void;
   onProjectChange: (projectId: string) => void;
   onProjectMaterialsUpload: (files: FileList | File[]) => void;
   onProjectMaterialDelete: (materialId: string) => void;
-  onKnowledgeMaterialsChange: Dispatch<SetStateAction<ProjectMaterial[]>>;
   onOpenProjectEdit: () => void;
   onOpenNewProject: () => void;
   onCurrentMemberChange: (memberId: string) => void;
-  onMemberRoleChange: (memberId: string, role: MemberRole) => void;
-  onMemberTokenChange: (memberId: string, total: number) => void;
-  newMemberDraft: { name: string; role: MemberRole; total: number };
-  onNewMemberDraftChange: (draft: {
-    name: string;
-    role: MemberRole;
-    total: number;
-  }) => void;
-  onAddMember: (event: FormEvent<HTMLFormElement>) => void;
   onThemeToggle: () => void;
   onOpenProfile: () => void;
   onChatInput: (value: string) => void;
@@ -3560,24 +3074,17 @@ function Workspace({
     voiceInput: AgentVoiceInput,
     textInstruction: string,
   ) => void;
-  onHubInput: (value: string) => void;
 }) {
   const dockItems = useMemo<DockItemData[]>(
     () =>
-      [
-        {
-          label: "主页",
-          onClick: onReturnHome,
-        },
-        ...navItems.map((item) => ({
-          label: item.label,
-          onClick: () => onViewChange(item.id),
-          className: activeView === item.id ? "active" : "",
-        })),
-      ],
-    [activeView, onReturnHome, onViewChange],
+      navItems.map((item) => ({
+        label: item.label,
+        onClick: () => onViewChange(item.id),
+        className: activeView === item.id ? "active" : "",
+      })),
+    [activeView, onViewChange],
   );
-  const showViewHeading = activeView === "agent" || activeView === "hub";
+  const showViewHeading = false;
   const showProjectActions = showViewHeading;
   const [visualInput, setVisualInput] = useState("");
   const [visualMessages, setVisualMessages] = useState<VisualMessage[]>([]);
@@ -3679,7 +3186,7 @@ function Workspace({
                   <SealCheck size={17} weight="bold" />
                   {session.collaboration.mode === "solo"
                     ? "个人创作"
-                    : `${members.length} 人协作`}
+                    : "项目空间"}
                 </div>
               </div>
             )}
@@ -3718,7 +3225,7 @@ function Workspace({
             permissions={permissions}
             project={project}
             materials={projectMaterials}
-            allProjectMaterials={allProjectMaterials}
+            onUploadMaterials={onProjectMaterialsUpload}
             userName={currentMember.name}
             userAvatarUrl={currentMember.avatarUrl}
             documentInput={documentInput}
@@ -3736,38 +3243,6 @@ function Workspace({
             setDocumentOutputPages={setDocumentOutputPages}
             setDocumentStatus={setDocumentStatus}
             setOutputStatus={setDocumentOutputStatus}
-          />
-        )}
-        {activeView === "fixture" && <FixtureView />}
-        {activeView === "database" && (
-          <DatabaseView
-            project={project}
-            projectMaterials={projectMaterials}
-            allProjectMaterials={allProjectMaterials}
-          />
-        )}
-        {activeView === "knowledge" && (
-          <KnowledgeView
-            allProjectMaterials={allProjectMaterials}
-            documents={knowledgeMaterials}
-            projectMaterials={projectMaterials}
-            onDocumentsChange={onKnowledgeMaterialsChange}
-          />
-        )}
-        {activeView === "quote" && <QuoteView permissions={permissions} />}
-        {activeView === "hub" && (
-          <HubView
-            session={session}
-            members={members}
-            currentMember={currentMember}
-            permissions={permissions}
-            newMemberDraft={newMemberDraft}
-            hubInput={hubInput}
-            onHubInput={onHubInput}
-            onMemberRoleChange={onMemberRoleChange}
-            onMemberTokenChange={onMemberTokenChange}
-            onNewMemberDraftChange={onNewMemberDraftChange}
-            onAddMember={onAddMember}
           />
         )}
       </section>
@@ -3855,6 +3330,10 @@ function AgentView({
   const hasConversation = agentMessages.length > 0;
   const userMessages = agentMessages.filter((message) => message.role === "user");
   const displayUserName = userName.trim() || "用户";
+  const agentConversationEndRef = useRef<HTMLDivElement | null>(null);
+  const [expandedAgentMessageIds, setExpandedAgentMessageIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const assistantActions = [
     { icon: ArrowClockwise, label: "重新生成" },
     { icon: ThumbsUp, label: "有帮助" },
@@ -3868,6 +3347,28 @@ function AgentView({
       navigator.clipboard.writeText(text).catch(() => undefined);
     }
   }
+
+  function stopAgentMessageTextPointerDown(event: ReactMouseEvent<HTMLElement>) {
+    event.stopPropagation();
+  }
+
+  function toggleAgentMessageExpanded(messageId: string) {
+    setExpandedAgentMessageIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(messageId)) {
+        next.delete(messageId);
+      } else {
+        next.add(messageId);
+      }
+
+      return next;
+    });
+  }
+
+  useEffect(() => {
+    agentConversationEndRef.current?.scrollIntoView({ block: "end" });
+  }, [agentMessages, agentStatus]);
 
   return (
     <div className="agent-layout">
@@ -3891,51 +3392,78 @@ function AgentView({
         <div className={`agent-home ${hasConversation ? "chatting" : ""}`}>
           {hasConversation ? (
             <div className="agent-conversation" aria-live="polite">
-              {agentMessages.map((message) => (
-                <article
-                  className={`agent-message ${message.role} ${
-                    message.status ?? "done"
-                  }`}
-                  key={message.id}
-                >
-                  <div className="agent-message-meta">
-                    <div className="agent-message-avatar" aria-hidden="true">
-                      {message.role === "assistant" ? (
-                        <img src="/brand/zerlum-logo-mark.png" alt="" />
-                      ) : (
-                        <UserMessageAvatar avatarUrl={userAvatarUrl} />
+              {agentMessages.map((message) => {
+                const messageText =
+                  message.text ||
+                  (message.status === "streaming" ? "正在思考..." : "");
+                const isLongAssistantMessage = message.role === "assistant" && message.text.length > AGENT_MESSAGE_COLLAPSE_LENGTH;
+                const shouldCollapseMessage = isLongAssistantMessage && !expandedAgentMessageIds.has(message.id);
+
+                return (
+                  <article
+                    className={`agent-message ${message.role} ${
+                      message.status ?? "done"
+                    }`}
+                    key={message.id}
+                  >
+                    <div className="agent-message-meta">
+                      <div className="agent-message-avatar" aria-hidden="true">
+                        {message.role === "assistant" ? (
+                          <img src="/brand/zerlum-logo-mark.png" alt="" />
+                        ) : (
+                          <UserMessageAvatar avatarUrl={userAvatarUrl} />
+                        )}
+                      </div>
+                      <span>
+                        {message.role === "assistant"
+                          ? "Zerlum Agent"
+                          : displayUserName}
+                      </span>
+                    </div>
+                    <div
+                      className={`agent-message-content ${
+                        shouldCollapseMessage ? "is-collapsed" : ""
+                      }`}
+                    >
+                      <p
+                        className="agent-message-text"
+                        onMouseDown={stopAgentMessageTextPointerDown}
+                      >
+                        {messageText}
+                      </p>
+                    </div>
+                    {isLongAssistantMessage && (
+                      <button
+                        className="agent-message-collapse-button"
+                        type="button"
+                        aria-expanded={!shouldCollapseMessage}
+                        onClick={() => toggleAgentMessageExpanded(message.id)}
+                      >
+                        {shouldCollapseMessage ? "展开全文" : "收起"}
+                      </button>
+                    )}
+                    {message.role === "assistant" &&
+                      message.status !== "streaming" && (
+                        <div className="agent-message-actions">
+                          {assistantActions.map((action) => (
+                            <button
+                              key={action.label}
+                              type="button"
+                              title={action.label}
+                              aria-label={action.label}
+                              onClick={() =>
+                                handleAgentAction(action.label, message.text)
+                              }
+                            >
+                              <action.icon size={15} weight="regular" />
+                            </button>
+                          ))}
+                        </div>
                       )}
-                    </div>
-                    <span>
-                      {message.role === "assistant"
-                        ? "Zerlum Agent"
-                        : displayUserName}
-                    </span>
-                  </div>
-                  <div className="agent-message-content">
-                    <p>
-                      {message.text ||
-                        (message.status === "streaming" ? "正在思考..." : "")}
-                    </p>
-                  </div>
-                  {message.role === "assistant" &&
-                    message.status !== "streaming" && (
-                    <div className="agent-message-actions">
-                      {assistantActions.map((action) => (
-                        <button
-                          key={action.label}
-                          type="button"
-                          title={action.label}
-                          aria-label={action.label}
-                          onClick={() => handleAgentAction(action.label, message.text)}
-                        >
-                          <action.icon size={15} weight="regular" />
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </article>
-              ))}
+                  </article>
+                );
+              })}
+              <div className="agent-conversation-end" ref={agentConversationEndRef} aria-hidden="true" />
             </div>
           ) : (
             <div className="agent-identity">
@@ -4059,7 +3587,7 @@ function AgentComposer({
   onSubmit,
   onVoiceSubmit,
   placeholder = "Ask Zerlum",
-  ariaLabel = "向 Zerlum Agent 提问",
+  ariaLabel = "向 Zerlum 生成助手提问",
   disabled = false,
 }: {
   value: string;
@@ -4611,6 +4139,10 @@ function CanvasView({
     }
 
     const handleNativeWheel = (event: WheelEvent) => {
+      if (shouldLetEmbeddedInputHandleWheel(event.target)) {
+        return;
+      }
+
       event.preventDefault();
       zoomCanvas(event.deltaY, event.clientX, event.clientY);
     };
@@ -5332,7 +4864,7 @@ function CanvasView({
 
     const requestMessage = voiceInput
       ? [
-          "请识别这段麦克风语音，并按语音内容生成或调整夜景效果图提示词。",
+          "请识别这段麦克风语音，并按语音内容生成或调整照明设计视觉提示词、画面分析或修改建议。",
           instruction ? `用户补充文字：${instruction}` : "",
         ]
           .filter(Boolean)
@@ -5362,7 +4894,7 @@ function CanvasView({
       {
         id: assistantId,
         author: "visual",
-        text: "正在结合 Zerlum 知识库生成夜景效果图提示词...",
+        text: "正在根据参考图和你的要求生成照明设计建议...",
       },
     ]);
     setVisualInput("");
@@ -5376,9 +4908,11 @@ function CanvasView({
         body: JSON.stringify({
           view: "canvas",
           message: [
-            "请遵循 agents/lighting-visualization/agent.md 中的“AI 无限画布夜景提示词模式”。",
-            "当前任务是为图片节点生成夜景照明效果图提示词。",
-            "生成提示词时必须要求与原图结构、构图、主体位置、镜头视角和透视关系保持一致。",
+            "当前任务是基于画布图片、节点关系和用户要求，生成或优化照明设计视觉提示词。",
+            "请先识别场景属于室内、室外建筑、景观、文旅夜游、视频镜头或不确定类型，再选择对应的分层照明设计框架。",
+            "用户参考图、文字要求和画布节点关系优先；不要机械套用固定夜景模板。",
+            "如果用户要提示词，输出可直接用于生成的提示词；如果用户要分析或修改建议，输出对应的设计判断和修改建议。",
+            "必须保持原图结构、构图、主体位置、镜头视角、透视关系、建筑比例和主要材质不变。",
             requestMessage,
             nodeSummary ? `当前画布节点：${nodeSummary}` : "",
             imageSummary,
@@ -5392,7 +4926,7 @@ function CanvasView({
 
       if (!response.ok || !response.body) {
         const fallback = await response.text();
-        throw new Error(fallback || "Zerlum Visual 暂时无法响应。");
+        throw new Error(parseApiErrorText(fallback, "Zerlum Visual 暂时无法响应。"));
       }
 
       const reader = response.body.getReader();
@@ -5997,6 +5531,10 @@ function UnifiedCanvasView({
     }
 
     const handleNativeWheel = (event: WheelEvent) => {
+      if (shouldLetEmbeddedInputHandleWheel(event.target)) {
+        return;
+      }
+
       event.preventDefault();
       zoomCanvas(event.deltaY, event.clientX, event.clientY);
     };
@@ -7325,14 +6863,18 @@ function UnifiedCanvasView({
         throw new Error("请先上传主图或连接参考图，再生成图片。");
       }
 
-      const shouldUseGeneratedPromptDirectly = node.promptSource === "generated";
-      const finalPrompt = shouldUseGeneratedPromptDirectly
+      const shouldUsePromptDirectly = canReuseCanvasPromptForImageGeneration(node.promptSource);
+      const finalPrompt = shouldUsePromptDirectly
         ? userPrompt
         : await requestCanvasGeneratedPrompt({
             node,
             images: promptImages,
             fallbackPrompt: userPrompt,
           });
+
+      if (!shouldUsePromptDirectly) {
+        updateCanvasNodePrompt(node.id, finalPrompt, "generated");
+      }
 
       updateCanvasVersion(node.id, versionId, (version) => ({
         ...version,
@@ -8261,6 +7803,7 @@ function CanvasNodeCard({
   onSelect: () => void;
   onSelectVersion: (nodeId: string, versionId: string) => void;
 }) {
+  const promptHighlightsRef = useRef<HTMLDivElement | null>(null);
   const size = getCanvasNodeSize(node);
   const version = getSelectedCanvasVersion(node);
   const mediaUrl = getCanvasNodeMediaUrl(node);
@@ -8312,6 +7855,15 @@ function CanvasNodeCard({
     node.kind === "image" &&
     mentionOptions.length > 0 &&
     shouldShowCanvasMentionMenu(node.prompt);
+
+  function syncPromptHighlightScroll(element: HTMLTextAreaElement) {
+    if (!promptHighlightsRef.current) {
+      return;
+    }
+
+    promptHighlightsRef.current.scrollTop = element.scrollTop;
+    promptHighlightsRef.current.scrollLeft = element.scrollLeft;
+  }
 
   return (
     <article
@@ -8512,7 +8064,11 @@ function CanvasNodeCard({
               )}
             </span>
             <div className="canvas-node-prompt-shell">
-              <div className="canvas-node-prompt-highlights" aria-hidden="true">
+              <div
+                ref={promptHighlightsRef}
+                className="canvas-node-prompt-highlights"
+                aria-hidden="true"
+              >
                 {renderCanvasPromptHighlights(node.prompt, mentionOptions)}
               </div>
               <textarea
@@ -8521,6 +8077,11 @@ function CanvasNodeCard({
                 onChange={(event) =>
                   onPromptChange(node.id, event.currentTarget.value)
                 }
+                onScroll={(event) => syncPromptHighlightScroll(event.currentTarget)}
+                onWheel={(event) => {
+                  event.stopPropagation();
+                  syncPromptHighlightScroll(event.currentTarget);
+                }}
                 placeholder={promptPlaceholder}
                 rows={3}
               />
@@ -9869,7 +9430,7 @@ function TextView({
   permissions,
   project,
   materials,
-  allProjectMaterials,
+  onUploadMaterials,
   userName,
   userAvatarUrl,
   documentInput,
@@ -9891,7 +9452,7 @@ function TextView({
   permissions: Permissions;
   project: Project;
   materials: ProjectMaterial[];
-  allProjectMaterials: ProjectKnowledgeMaterial[];
+  onUploadMaterials: (files: FileList | File[]) => void;
   userName: string;
   userAvatarUrl: string | undefined;
   documentInput: string;
@@ -9926,6 +9487,15 @@ function TextView({
   const canExport = permissions.canExportDocs && hasOutput;
   const displayUserName = userName.trim() || "用户";
   const outputAbortControllerRef = useRef<AbortController | null>(null);
+  const documentUploadInputRef = useRef<HTMLInputElement | null>(null);
+
+  function handleDocumentMaterialInputChange(event: ChangeEvent<HTMLInputElement>) {
+    if (event.target.files) {
+      onUploadMaterials(event.target.files);
+    }
+
+    event.target.value = "";
+  }
 
   function buildOutlineAgentContext(userRequest: string) {
     const currentProjectMaterials = materials.slice(0, 12);
@@ -10423,6 +9993,23 @@ function TextView({
             <small>方案大纲排布建议</small>
           </div>
         </header>
+        <div className="document-upload-strip">
+          <button
+            className="document-upload-button"
+            type="button"
+            onClick={() => documentUploadInputRef.current?.click()}
+          >
+            <UploadSimple size={15} weight="bold" />
+            上传资料
+          </button>
+          <input
+            ref={documentUploadInputRef}
+            className="agent-hidden-file"
+            type="file"
+            multiple
+            onChange={handleDocumentMaterialInputChange}
+          />
+        </div>
         <div className={`document-agent-home ${hasConversation ? "chatting" : ""}`}>
           <div className="document-agent-conversation" aria-live="polite">
             {documentMessages.map((message) => (
@@ -10582,610 +10169,6 @@ function TextView({
   );
 }
 
-function FixtureView() {
-  const [query, setQuery] = useState("");
-  const hasQuery = query.trim().length > 0;
-
-  return (
-    <div className="library-view">
-      <div className="library-toolbar">
-        <LabelledInput label="搜索灯具" value={query} onChange={setQuery} />
-        <button
-          className="secondary-button"
-          type="button"
-          disabled={!hasQuery}
-          title={hasQuery ? "筛选功率" : "先输入灯具关键词"}
-        >
-          <Gauge size={18} weight="bold" />
-          筛选功率
-        </button>
-        <button
-          className="primary-button compact"
-          type="button"
-          disabled
-          title="选择灯具后可加入清单"
-        >
-          <CheckCircle size={18} weight="bold" />
-          加入清单
-        </button>
-      </div>
-      <div className="fixture-grid">
-        <EmptyState
-          icon={Package}
-          title={hasQuery ? "暂无匹配灯具" : "暂无灯具"}
-          text={
-            hasQuery
-              ? `当前灯具库里没有与「${query.trim()}」匹配的型号。`
-              : "导入企业灯具库或从项目清单添加灯具后，这里会显示型号、参数和价格。"
-          }
-        />
-      </div>
-    </div>
-  );
-}
-
-function DatabaseView({
-  project,
-  projectMaterials,
-  allProjectMaterials,
-}: {
-  project: Project;
-  projectMaterials: ProjectMaterial[];
-  allProjectMaterials: ProjectKnowledgeMaterial[];
-}) {
-  const [query, setQuery] = useState("");
-  const [activeDirectory, setActiveDirectory] = useState("database-folder-assets");
-  const hasQuery = query.trim().length > 0;
-  const databaseAssets = useMemo(
-    () => buildProjectDatabaseAssets(project, projectMaterials, allProjectMaterials),
-    [allProjectMaterials, project, projectMaterials],
-  );
-  const databaseCaseDocuments = useMemo(
-    () =>
-      desktopKnowledgeIndex.documents.filter(
-        (document) => document.collection === "project-cases",
-      ),
-    [],
-  );
-  const databaseCaseFolder = getMarkdownCollectionLocalFolder(databaseCaseDocuments);
-  const caseChunkCount = databaseCaseDocuments.reduce(
-    (total, document) => total + document.chunkCount,
-    0,
-  );
-  const structuredMaterialCount = databaseAssets.filter(
-    (asset) => asset.sourceLabel === "结构化项目资料",
-  ).length;
-  const normalizedQuery = query.trim().toLowerCase();
-  const openDatabaseDirectory = (directoryId: string, folderPath: string) => {
-    setActiveDirectory(directoryId);
-    void openLocalFolder(folderPath);
-  };
-  const filteredAssets = hasQuery
-    ? databaseAssets.filter((asset) => {
-        const searchable = [
-          asset.name,
-          asset.sourceLabel,
-          asset.recordCount,
-          asset.updatedAt,
-          asset.agentUse,
-          ...asset.fields,
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        return searchable.includes(normalizedQuery);
-      })
-    : databaseAssets;
-  const filteredCaseDocuments = databaseCaseDocuments.filter((document) =>
-    matchesMarkdownDocument(document, normalizedQuery),
-  );
-
-  return (
-    <div className="knowledge-layout">
-      <section className="production-panel">
-        <PanelTitle icon={Database} title="数据库资料" />
-        <div className="knowledge-summary-grid" aria-label="数据库资料统计">
-          <MetricButton
-            label="数据资产"
-            value={`${databaseAssets.length} 个`}
-            onClick={() =>
-              openDatabaseDirectory("database-folder-assets", localKnowledgeIndexFolder)
-            }
-          />
-          <MetricButton
-            label="项目案例"
-            value={`${databaseCaseDocuments.length} 个`}
-            onClick={() =>
-              openDatabaseDirectory(
-                "database-folder-project-cases",
-                databaseCaseFolder,
-              )
-            }
-          />
-          <MetricButton
-            label="案例切片"
-            value={`${caseChunkCount} 个`}
-            onClick={() =>
-              openDatabaseDirectory(
-                "database-folder-project-cases",
-                databaseCaseFolder,
-              )
-            }
-          />
-          <MetricButton
-            label="当前项目字段"
-            value="4 个"
-            onClick={() =>
-              openDatabaseDirectory("database-folder-assets", localKnowledgeIndexFolder)
-            }
-          />
-        </div>
-        <LabelledInput label="检索条件" value={query} onChange={setQuery} />
-        {filteredAssets.length > 0 || filteredCaseDocuments.length > 0 ? (
-          <div className="database-directory-list">
-            <section
-              id="database-folder-assets"
-              className={`markdown-directory-group ${
-                activeDirectory === "database-folder-assets" ? "active" : ""
-              }`}
-            >
-              <div className="markdown-directory-head">
-                <div>
-                  <span>数据库目录</span>
-                  <strong>结构化数据资产</strong>
-                </div>
-                <small>目录：项目数据库</small>
-              </div>
-              <div className="case-list database-list">
-                {filteredAssets.map((asset) => (
-                  <article key={asset.id}>
-                    <div>
-                      <strong>{asset.name}</strong>
-                      <span>{asset.sourceLabel}</span>
-                    </div>
-                    <p>
-                      记录规模：{asset.recordCount} · 更新时间：{asset.updatedAt}
-                    </p>
-                    <small>字段：{asset.fields.join("、")}</small>
-                    <p>{asset.agentUse}</p>
-                  </article>
-                ))}
-              </div>
-            </section>
-            <section
-              id="database-folder-project-cases"
-              className={`markdown-directory-group ${
-                activeDirectory === "database-folder-project-cases" ? "active" : ""
-              }`}
-            >
-              <div className="markdown-directory-head">
-                <div>
-                  <span>数据库目录</span>
-                  <strong>项目案例</strong>
-                </div>
-                <small>
-                  目录：{getMarkdownCollectionFolder(databaseCaseDocuments)}
-                </small>
-                <button
-                  className="secondary-button compact"
-                  type="button"
-                  onClick={() => openDatabaseDirectory(
-                    "database-folder-project-cases",
-                    databaseCaseFolder,
-                  )}
-                >
-                  <FolderOpen size={17} weight="bold" />
-                  打开文件夹
-                </button>
-              </div>
-              <div className="knowledge-list markdown-knowledge-list">
-                {filteredCaseDocuments.map((document) => (
-                  <article key={document.id}>
-                    <div>
-                      <strong>{document.title}.md</strong>
-                      <span>{getMarkdownCollectionLabel(document.collection)}</span>
-                    </div>
-                    <p>
-                      文件格式：Markdown · 切片：{document.chunkCount} 个 · 大小：
-                      {formatChineseFileSize(document.byteLength)} · 更新：
-                      {formatChineseDate(document.modifiedAt)}
-                    </p>
-                    <small>案例资料：{getMarkdownKnowledgePoints(document)}</small>
-                    <small>{getMarkdownRequirementText(document)}</small>
-                    <p>
-                      路由 Agent：{getMarkdownAgentLabels(document.agentRoutes)} ·
-                      调用板块：{getMarkdownViewLabels(document.platformViews)}
-                    </p>
-                    <p>来源目录：{getMarkdownFolderPath(document)}</p>
-                    <button
-                      className="secondary-button compact"
-                      type="button"
-                      onClick={() =>
-                        openLocalFolder(getMarkdownDocumentLocalFolder(document))
-                      }
-                    >
-                      <FolderOpen size={17} weight="bold" />
-                      打开文件夹
-                    </button>
-                  </article>
-                ))}
-              </div>
-            </section>
-          </div>
-        ) : (
-          <EmptyState
-            icon={Database}
-            title="暂无匹配数据"
-            text={`数据库里暂时没有与「${query.trim()}」匹配的结构化资料。`}
-          />
-        )}
-      </section>
-      <section className="preview-panel">
-        <PanelTitle icon={ChartBar} title="Agent 调取方式" />
-        <div className="markdown-collection-list">
-          <button
-            type="button"
-            onClick={() =>
-              openDatabaseDirectory("database-folder-assets", localKnowledgeIndexFolder)
-            }
-          >
-            <span>结构化数据资产</span>
-            <strong>{databaseAssets.length} 个</strong>
-          </button>
-          <button
-            type="button"
-            onClick={() =>
-              openDatabaseDirectory(
-                "database-folder-project-cases",
-                databaseCaseFolder,
-              )
-            }
-          >
-            <span>项目案例目录</span>
-            <strong>{databaseCaseDocuments.length} 个</strong>
-          </button>
-        </div>
-        <div className="rule-list">
-          <article className="callout-rule">
-            <strong>数据库负责结构化事实</strong>
-            <p>项目字段、灯具参数、报价清单、空间台账和项目案例索引优先从数据库读取。</p>
-          </article>
-          <article className="callout-rule">
-            <strong>知识库负责文档依据</strong>
-            <p>规范、客户资料、方法论和方案依据从知识库检索，并在输出里标明引用来源。</p>
-          </article>
-          <article className="callout-rule">
-            <strong>生成时组合调用</strong>
-            <p>Agent 先用数据库确定项目边界，再用知识库补充依据，最后生成方案文本或图片式方案。</p>
-          </article>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function KnowledgeView({
-  documents,
-  onDocumentsChange,
-}: {
-  allProjectMaterials: ProjectKnowledgeMaterial[];
-  documents: ProjectMaterial[];
-  projectMaterials: ProjectMaterial[];
-  onDocumentsChange: Dispatch<SetStateAction<ProjectMaterial[]>>;
-}) {
-  const inputRef = useRef<HTMLInputElement | null>(null);
-  const indexedMarkdownDocuments = useMemo(
-    () =>
-      desktopKnowledgeIndex.documents.filter(
-        (document) => document.collection !== "project-cases",
-      ),
-    [],
-  );
-  const movedProjectCaseCount = desktopKnowledgeIndex.documents.filter(
-    (document) => document.collection === "project-cases",
-  ).length;
-  const uploadedMarkdownDocuments = documents.filter((document) =>
-    ["md", "markdown"].includes(getMaterialExtension(document.name)),
-  );
-  const markdownChunkCount = indexedMarkdownDocuments.reduce(
-    (total, document) => total + document.chunkCount,
-    0,
-  );
-  const auditDocumentCount = indexedMarkdownDocuments.filter(
-    (document) => document.needsAudit,
-  ).length;
-  const knowledgeViewDocumentCount = indexedMarkdownDocuments.filter((document) =>
-    document.platformViews.includes("knowledge"),
-  ).length;
-  const standardsAuditFolder = getMarkdownCollectionLocalFolder(
-    indexedMarkdownDocuments.filter(
-      (document) => document.collection === "standards-audit",
-    ),
-  );
-
-  function handleKnowledgeUpload(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-
-    if (files.length === 0) {
-      return;
-    }
-
-    const uploadedAt = formatUploadTime();
-
-    onDocumentsChange((current) => [
-      ...current,
-      ...files.map((file) => ({
-        id: createId("knowledge"),
-        name: file.name,
-        size: file.size,
-        type: file.type || "text/markdown",
-        uploadedAt,
-        collection: "Markdown 上传",
-      })),
-    ]);
-
-    event.target.value = "";
-  }
-
-  return (
-    <div className="knowledge-layout knowledge-layout-single">
-      <section className="production-panel">
-        <PanelTitle icon={BookOpenText} title="知识库资料" />
-        <div className="knowledge-summary-grid" aria-label="知识库资料统计">
-          <MetricButton
-            label="Markdown 文档"
-            value={`${indexedMarkdownDocuments.length + uploadedMarkdownDocuments.length} 个`}
-            onClick={() => void openLocalFolder(desktopKnowledgeIndex.sourceRoot)}
-          />
-          <MetricButton
-            label="检索切片"
-            value={`${markdownChunkCount} 个`}
-            onClick={() => void openLocalFolder(localKnowledgeIndexFolder)}
-          />
-          <MetricButton
-            label="规范待审"
-            value={`${auditDocumentCount} 个`}
-            onClick={() => void openLocalFolder(standardsAuditFolder)}
-          />
-          <MetricButton
-            label="知识库检索"
-            value={`${knowledgeViewDocumentCount} 个`}
-            onClick={() => void openLocalFolder(desktopKnowledgeIndex.sourceRoot)}
-          />
-        </div>
-        <div className="knowledge-transfer-note">
-          <FileText size={17} weight="bold" />
-          <span>
-            项目案例 {movedProjectCaseCount} 个已转入数据库；知识库只展示 Markdown
-            知识资料和规范要求。
-          </span>
-        </div>
-        <button
-          className="secondary-button full"
-          type="button"
-          onClick={() => inputRef.current?.click()}
-        >
-          <UploadSimple size={18} weight="bold" />
-          上传 Markdown
-        </button>
-        <input
-          ref={inputRef}
-          className="agent-hidden-file"
-          type="file"
-          accept=".md,.markdown,text/markdown,text/plain"
-          multiple
-          onChange={handleKnowledgeUpload}
-        />
-      </section>
-    </div>
-  );
-}
-
-function QuoteView({ permissions }: { permissions: Permissions }) {
-  return (
-    <div className="quote-view">
-      <section className="quote-table">
-        <PanelTitle icon={CurrencyDollar} title="灯具报价清单" />
-        <EmptyState
-          icon={CurrencyDollar}
-          title="暂无报价条目"
-          text="从灯具库加入型号或导入清单后，这里会生成可编辑报价。"
-        />
-      </section>
-      <aside className="quote-summary">
-        <MetricCard label="灯具成本" value="未计算" />
-        <MetricCard label="控制系统" value="未计算" />
-        <MetricCard label="安装预估" value="未计算" />
-        <button
-          className="primary-button full"
-          type="button"
-          disabled
-          title={
-            permissions.canManageQuote
-              ? "暂无可导出的报价条目"
-              : "当前角色没有报价导出权限"
-          }
-        >
-          <DownloadSimple size={18} weight="bold" />
-          导出报价单
-        </button>
-      </aside>
-    </div>
-  );
-}
-
-function HubView({
-  session,
-  members,
-  currentMember,
-  permissions,
-  newMemberDraft,
-  hubInput,
-  onHubInput,
-  onMemberRoleChange,
-  onMemberTokenChange,
-  onNewMemberDraftChange,
-  onAddMember,
-}: {
-  session: Session;
-  members: TeamMember[];
-  currentMember: TeamMember;
-  permissions: Permissions;
-  newMemberDraft: { name: string; role: MemberRole; total: number };
-  hubInput: string;
-  onHubInput: (value: string) => void;
-  onMemberRoleChange: (memberId: string, role: MemberRole) => void;
-  onMemberTokenChange: (memberId: string, total: number) => void;
-  onNewMemberDraftChange: (draft: {
-    name: string;
-    role: MemberRole;
-    total: number;
-  }) => void;
-  onAddMember: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  return (
-    <div className="hub-layout">
-      <section className="artifact-wall">
-        <PanelTitle icon={UsersThree} title="项目交付总览" />
-        <EmptyState
-          icon={UsersThree}
-          title="暂无交付物"
-          text="Agent、画布、文本、视频和报价模块生成内容后，会自动归档到这里。"
-        />
-        <PanelTitle icon={Gauge} title="管理员 token 面板" />
-        {!permissions.canManageMembers && (
-          <div className="permission-note">
-            <ShieldCheck size={18} weight="bold" />
-            <span>
-              当前身份是 {currentMember.role}。你可以查看成员与额度，只有管理员可以调整角色和分配 token。
-            </span>
-          </div>
-        )}
-        <div className="usage-list">
-          {members.map((member) => (
-            <article key={member.id}>
-              <div>
-                <strong>{member.name}</strong>
-                <span>
-                  {member.status} · {member.role}
-                </span>
-              </div>
-              <meter value={member.used} max={member.total} />
-              <div className="member-controls">
-                {permissions.canManageMembers ? (
-                  <DropdownSelect
-                    className="member-role-dropdown"
-                    value={member.role}
-                    onValueChange={(role) =>
-                      onMemberRoleChange(member.id, role as MemberRole)
-                    }
-                    ariaLabel={`${member.name} 的岗位`}
-                    options={memberRoleOptions}
-                  />
-                ) : (
-                  <b>{member.role}</b>
-                )}
-                {permissions.canAllocateTokens ? (
-                  <input
-                    type="number"
-                    min={member.used}
-                    step={1000}
-                    value={member.total}
-                    onChange={(event) =>
-                      onMemberTokenChange(member.id, Number(event.target.value))
-                    }
-                    aria-label={`${member.name} 的 token 总额`}
-                  />
-                ) : (
-                  <b>
-                    {member.used.toLocaleString()} /{" "}
-                    {member.total.toLocaleString()}
-                  </b>
-                )}
-              </div>
-            </article>
-          ))}
-        </div>
-        <form className="add-member-form" onSubmit={onAddMember}>
-          <LabelledInput
-            label="新增成员"
-            value={newMemberDraft.name}
-            disabled={!permissions.canManageMembers}
-            onChange={(name) =>
-              onNewMemberDraftChange({ ...newMemberDraft, name })
-            }
-          />
-          <div className="field">
-            <span>默认岗位</span>
-            <DropdownSelect
-              className="form-dropdown"
-              value={newMemberDraft.role}
-              disabled={!permissions.canManageMembers}
-              onValueChange={(role) =>
-                onNewMemberDraftChange({
-                  ...newMemberDraft,
-                  role: role as MemberRole,
-                })
-              }
-              ariaLabel="默认岗位"
-              options={memberRoleOptions}
-            />
-          </div>
-          <label className="field">
-            <span>初始 token</span>
-            <input
-              type="number"
-              min={1000}
-              step={1000}
-              value={newMemberDraft.total}
-              disabled={!permissions.canAllocateTokens}
-              onChange={(event) =>
-                onNewMemberDraftChange({
-                  ...newMemberDraft,
-                  total: Number(event.target.value),
-                })
-              }
-            />
-          </label>
-          <button
-            className="primary-button full"
-            type="submit"
-            disabled={!permissions.canManageMembers}
-          >
-            <PlusCircle size={18} weight="bold" />
-            添加成员
-          </button>
-        </form>
-      </section>
-      <section className="hub-chat">
-        <PanelTitle icon={ChatCircleText} title="协作聊天" />
-        <EmptyState
-          icon={ChatCircleText}
-          title="暂无协作消息"
-          text="团队成员发送的项目消息会显示在这里。"
-        />
-        <form
-          className="chat-composer hub"
-          onSubmit={(event) => {
-            event.preventDefault();
-            onHubInput("");
-          }}
-        >
-          <input
-            value={hubInput}
-            onChange={(event) => onHubInput(event.target.value)}
-            placeholder="输入协作消息"
-            aria-label="输入协作消息"
-          />
-          <button type="submit" className="primary-button compact">
-            <PaperPlaneTilt size={18} weight="bold" />
-            发送
-          </button>
-        </form>
-      </section>
-    </div>
-  );
-}
 
 function ModalFrame({
   title,

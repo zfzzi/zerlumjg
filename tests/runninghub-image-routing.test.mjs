@@ -12,6 +12,14 @@ const apiSource = readFileSync(
 );
 const appSource = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
 const localEnv = readFileSync(new URL("../.env.local", import.meta.url), "utf8");
+const configImageHandlerBlock = configSource.slice(
+  configSource.indexOf('server.middlewares.use("/api/zerlum-image"'),
+  configSource.indexOf('server.middlewares.use("/api/zerlum-video"'),
+);
+const apiImageHandlerBlock = apiSource.slice(
+  apiSource.indexOf("export async function handleZerlumImage"),
+  apiSource.indexOf("export async function handleZerlumVideo"),
+);
 
 test("image generation defaults to RunningHub image-quality edit endpoint", () => {
   assert.match(configSource, /\/rhart-imagine-image-quality\/edit/);
@@ -53,6 +61,47 @@ test("local image generation credentials are configured", () => {
   );
   assert.match(localEnv, /^RUNNINGHUB_UPSCALE_API_KEY=.+$/m);
   assert.match(localEnv, /^RUNNINGHUB_UPSCALE_WEBAPP_ID=2063809922772594690$/m);
+});
+
+test("image generation can use the qweapi OpenAI-compatible image channel", () => {
+  assert.match(localEnv, /^IMAGE_GENERATION_PROVIDER=qweapi$/m);
+  assert.match(localEnv, /^OPENAI_IMAGE_API_KEY=.+$/m);
+  assert.match(localEnv, /^OPENAI_IMAGE_BASE_URL=https:\/\/qweapi\.com$/m);
+  assert.match(localEnv, /^OPENAI_IMAGE_MODEL=gpt-image-2$/m);
+
+  [configSource, apiSource].forEach((source) => {
+    assert.match(source, /IMAGE_GENERATION_PROVIDER/);
+    assert.match(source, /OPENAI_IMAGE_API_KEY/);
+    assert.match(source, /OPENAI_IMAGE_BASE_URL/);
+    assert.match(source, /OPENAI_IMAGE_MODEL/);
+    assert.match(source, /runOpenAiImageGeneration/);
+    assert.match(source, /resolveOpenAiResponsesEndpoint\([^)]*"OPENAI_IMAGE_BASE_URL"/);
+    assert.match(source, /collectDocumentOutputImages\(payload\)/);
+  });
+});
+
+test("image generation sends the canvas prompt directly and upscales qweapi output", () => {
+  for (const source of [configImageHandlerBlock, apiImageHandlerBlock]) {
+    assert.doesNotMatch(source, /withZerlumSkillGenerationPrompt\(prompt\)/);
+    assert.doesNotMatch(source, /prompt:\s*skillPrompt,/);
+    assert.match(
+      source,
+      /const generated = await runOpenAiImageGeneration\({[\s\S]*prompt,[\s\S]*\}\);[\s\S]*const upscaled = await runRunningHubUpscale\({[\s\S]*imageUrl: generated\.imageUrl,[\s\S]*targetResolution,/,
+    );
+    assert.match(
+      source,
+      /provider: "qweapi",[\s\S]*upscaled: true,/,
+    );
+    assert.match(
+      source,
+      /imageUrl: upscaled\.imageUrl,[\s\S]*baseImageUrl: generated\.imageUrl/,
+    );
+  }
+
+  for (const source of [configSource, apiSource]) {
+    assert.match(source, /const enrichedPrompt = prompt;/);
+    assert.match(source, /prompt: enrichedPrompt,/);
+  }
 });
 
 test("canvas image generation supports adaptive source-image aspect ratio", () => {

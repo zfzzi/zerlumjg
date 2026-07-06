@@ -1,3 +1,8 @@
+import {
+  withZerlumSkillContext,
+  withZerlumSkillGenerationPrompt,
+} from "./zerlum-skill.js";
+
 declare const process: {
   env: Record<string, string | undefined>;
 };
@@ -12,6 +17,7 @@ const arkVideoTasksEndpoint = "https://ark.cn-beijing.volces.com/api/v3/contents
 const openAiDefaultBaseUrl = "https://api.openai.com";
 const openAiDefaultAgentModel = "gpt-4o-mini";
 const openAiDefaultDocumentOutputModel = "gpt-image-2";
+const openAiDefaultImageModel = "gpt-image-2";
 const openAiDefaultDocumentOutputTimeoutMs = 180_000;
 const arkDefaultAgentModel = "doubao-seed-2-1-pro-260628";
 const arkDefaultVideoModel = "doubao-seedance-2-0-260128";
@@ -53,6 +59,8 @@ type ResponseLike = {
   setHeader: (name: string, value: string) => void;
   write: (chunk: unknown) => void;
   end: (body?: string) => void;
+  headersSent?: boolean;
+  writableEnded?: boolean;
 };
 
 type RunningHubNodeInfo = {
@@ -123,6 +131,29 @@ function sendJson(response: ResponseLike, statusCode: number, payload: unknown) 
   response.end(JSON.stringify(payload));
 }
 
+function sendAgentProxyError(response: ResponseLike, error: unknown) {
+  const message =
+    error instanceof Error ? error.message : "Agent proxy request failed";
+
+  if (response.headersSent) {
+    if (!response.writableEnded) {
+      try {
+        response.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+      } catch {}
+
+      try {
+        response.end();
+      } catch {}
+    }
+
+    return;
+  }
+
+  response.statusCode = 500;
+  response.setHeader("Content-Type", "application/json");
+  response.end(JSON.stringify({ error: message }));
+}
+
 function writeAgentTextEvent(response: ResponseLike, text: string) {
   response.write(
     `data: ${JSON.stringify({
@@ -179,6 +210,12 @@ function resolveDocumentOutputTimeoutMs() {
   return Number.isFinite(parsed) && parsed > 0
     ? parsed
     : openAiDefaultDocumentOutputTimeoutMs;
+}
+
+function shouldUseOpenAiImageProvider() {
+  const provider = envValue("IMAGE_GENERATION_PROVIDER").toLowerCase();
+
+  return ["openai", "qweapi", "newapi"].includes(provider);
 }
 
 function resolveRunningHubUpscaleWebappId() {
@@ -306,6 +343,66 @@ function extractDocumentOutputText(payload: unknown) {
   }
 
   return "模型已返回结果，但没有可显示的文本内容。";
+}
+
+function collectOpenAiChatMessageText(value: unknown): string[] {
+  if (typeof value === "string") {
+    return value.trim() ? [value] : [];
+  }
+
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => collectOpenAiChatMessageText(item));
+  }
+
+  const record = value as Record<string, unknown>;
+  const fragments: string[] = [];
+
+  ["content", "text", "output_text"].forEach((key) => {
+    if (key in record) {
+      fragments.push(...collectOpenAiChatMessageText(record[key]));
+    }
+  });
+
+  if ("message" in record) {
+    fragments.push(...collectOpenAiChatMessageText(record.message));
+  }
+
+  return fragments;
+}
+
+function extractOpenAiChatCompletionText(payload: unknown) {
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+
+  const record = payload as Record<string, unknown>;
+  const choiceTexts = Array.isArray(record.choices)
+    ? record.choices.flatMap((choice) => {
+        if (!choice || typeof choice !== "object") {
+          return [];
+        }
+
+        const choiceRecord = choice as Record<string, unknown>;
+
+        return collectOpenAiChatMessageText(
+          choiceRecord.message ?? choiceRecord.delta ?? choiceRecord,
+        );
+      })
+    : [];
+
+  if (choiceTexts.length) {
+    return choiceTexts.join("").trim();
+  }
+
+  const outputText = extractDocumentOutputText(payload);
+
+  return outputText === "模型已返回结果，但没有可显示的文本内容。"
+    ? ""
+    : outputText;
 }
 
 function cleanCanvasPromptOutput(prompt: string) {
@@ -544,9 +641,12 @@ function buildAgentPrompt({
   const canvasVisualInstruction =
     view === "canvas"
       ? [
-          "【AI无限画布输出约束】",
-          "生成或优化提示词时，必须明确要求与原图结构、构图、主体位置、镜头视角和透视关系保持一致。",
-          "只输出两段：Zerlum 知识库依据、夜景效果图提示词。不要列检索片段、路径、集合名称或召回细节。",
+          "【AI无限画布照明设计框架】",
+          "根据用户任务选择输出形式：提示词、画面分析、修改建议或照明设计说明。",
+          "先结合参考图、画布节点和用户文字判断场景类型：室内、室外建筑、景观、文旅夜游、视频镜头或不确定；再选择对应的分层照明设计框架。",
+          "用户参考图、文字要求和画布节点关系优先；如果用户想法与通用建议不同，以用户想法为主，同时保持照明专业性。",
+          "生成或优化视觉提示词时，必须保持原图结构、构图、主体位置、镜头视角、透视关系、建筑比例和主要材质不变。",
+          "不要暴露数据库、知识库、MD 文件路径、Skill 名称或内部规则；不要机械套用固定蓝调室外夜景模板。",
         ].join("\n")
       : "";
   const outlineInstruction = isOutlineTask
@@ -565,14 +665,14 @@ function buildAgentPrompt({
   const agentInstruction = isOutlineTask
     ? "请以 Zerlum照明系统身份回答，只依据用户上传资料和当前项目基础信息生成大纲。"
     : view === "canvas"
-      ? "请严格按 AI 无限画布输出约束回答，只生成夜景效果图提示词相关内容。"
+      ? "请按 AI 无限画布照明设计框架回答：根据用户意图输出提示词、画面分析、修改建议或照明设计说明，并让后端分层灯光设计框架的场景判断、设计工具箱和差异化变量参与判断。"
       : agentImages.length
-        ? "请以 Zerlum 视觉 Agent 身份先观察附带图片，再结合 Zerlum 知识库给出画面理解、提示词建议、问题判断和可执行修改建议；提示词建议必须要求与原图结构、构图、主体位置、镜头视角和透视关系保持一致。"
+        ? "请以 Zerlum 视觉助手身份先观察附带图片，再基于用户输入、上传资料和当前项目基础信息给出画面理解、提示词建议、问题判断和可执行修改建议；提示词建议必须要求与原图结构、构图、主体位置、镜头视角和透视关系保持一致。"
         : agentAudio.length
-          ? "请以 Zerlum Agent 身份先识别附带语音，再结合 Zerlum 知识库回答语音里的请求。"
-          : "请以 Zerlum Agent 身份回答，并基于 Zerlum 知识库说明依据、假设和需要复核的地方。";
+          ? "请以 Zerlum 照明设计助手身份先识别附带语音，再基于用户输入、上传资料和当前项目基础信息回答语音里的请求。"
+          : "请以 Zerlum 照明设计助手身份回答，并基于用户输入、上传资料和当前项目基础信息说明依据、假设和需要复核的地方。";
 
-  return [
+  const basePrompt = [
     canvasVisualInstruction,
     outlineInstruction,
     "【当前用户请求】",
@@ -586,6 +686,8 @@ function buildAgentPrompt({
   ]
     .filter(Boolean)
     .join("\n");
+
+  return withZerlumSkillContext(basePrompt);
 }
 
 function collectImageCandidates(value: unknown, keyHint = ""): string[] {
@@ -787,6 +889,76 @@ async function postRunningHubJson(
   });
 
   return parseRunningHubResponse(upstream, "RunningHub request failed");
+}
+
+async function runOpenAiImageGeneration({
+  apiKey,
+  endpoint,
+  model,
+  prompt,
+  imageUrls,
+}: {
+  apiKey: string;
+  endpoint: string;
+  model: string;
+  prompt: string;
+  imageUrls: string[];
+}) {
+  const inputImages = [...new Set(imageUrls.map((url) => url.trim()).filter(Boolean))];
+  const requestPayload = {
+    model,
+    stream: false,
+    input: [
+      {
+        role: "user",
+        content: [
+          ...inputImages.map((imageUrl) => ({
+            type: "input_image",
+            image_url: imageUrl,
+          })),
+          {
+            type: "input_text",
+            text: prompt,
+          },
+        ],
+      },
+    ],
+  };
+  const upstream = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(requestPayload),
+  });
+  const upstreamText = await upstream.text();
+  let payload: unknown = {};
+
+  try {
+    payload = upstreamText ? JSON.parse(upstreamText) : {};
+  } catch {
+    payload = upstreamText;
+  }
+
+  if (!upstream.ok) {
+    throw new Error(
+      findScalarByKey(payload, ["message", "error", "msg"]) ||
+        (typeof payload === "string" ? payload.slice(0, 600) : "") ||
+        `qweapi 生图请求失败：${upstream.status}`,
+    );
+  }
+
+  const imageUrl = collectDocumentOutputImages(payload)[0] ?? "";
+
+  if (!imageUrl) {
+    throw new Error("qweapi 生图接口已返回，但没有找到可用图片。");
+  }
+
+  return {
+    imageUrl,
+    payload,
+  };
 }
 
 function extractTaskId(payload: unknown) {
@@ -1113,16 +1285,7 @@ async function runRunningHubImageToImage({
   }
 
   const uploadedImageUrl = uploadedImageUrls[0];
-  const enrichedPrompt = [
-    "根据参考图进行照明效果图图生图创作。",
-    uploadedImageUrls.length > 1
-      ? `同时参考 ${uploadedImageUrls.length} 张输入图，第一张为主图，其余为参考图。`
-      : "",
-    prompt,
-    "保持参考图的空间结构、主体关系和视角逻辑；重点强化灯光层次、材质质感、夜景氛围和方案表达清晰度。",
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const enrichedPrompt = prompt;
   const isEditEndpoint = /\/edit(?:\?|$)/i.test(endpoint);
   const normalizedAspectRatio = normalizeRunningHubImageAspectRatio(aspectRatio);
   const submitPayload = await postRunningHubJson(
@@ -1871,6 +2034,7 @@ export async function handleZerlumAgent(request: RequestLike, response: Response
     const agentAudio = normalizeAgentAudio(body.audio ?? body.audios);
     const projectMaterials = normalizeProjectMaterialInputs(body.materials);
     const hasAgentAudio = agentAudio.length > 0;
+    const arkApiKey = envValue("ARK_API_KEY", "ARK_RESPONSES_API_KEY");
 
     if (!message && !hasAgentAudio) {
       sendJson(response, 400, { error: "Message is required" });
@@ -1885,7 +2049,7 @@ export async function handleZerlumAgent(request: RequestLike, response: Response
         )
       : useOpenAiChat
         ? envValue("OPENAI_API_KEY", "CONCEPT_OUTLINE_ARK_CHAT_API_KEY")
-        : envValue("ARK_API_KEY", "ARK_RESPONSES_API_KEY");
+        : arkApiKey;
     const missingKeyName = isDocumentOutputTask
       ? "OPENAI_DOCUMENT_OUTPUT_API_KEY"
       : useOpenAiChat
@@ -1921,6 +2085,8 @@ export async function handleZerlumAgent(request: RequestLike, response: Response
             openAiDefaultAgentModel
           : envValue("OPENAI_AGENT_MODEL") || openAiDefaultAgentModel
         : envValue("ARK_AGENT_MODEL", "ARK_RESPONSES_MODEL") || arkDefaultAgentModel;
+    const arkAgentModel =
+      envValue("ARK_AGENT_MODEL", "ARK_RESPONSES_MODEL") || arkDefaultAgentModel;
     const content = [
       ...agentImages.map((image) => ({
         type: "input_image",
@@ -1972,6 +2138,7 @@ export async function handleZerlumAgent(request: RequestLike, response: Response
       : useOpenAiChat
         ? resolveOpenAiChatEndpoint()
         : envValue("ARK_RESPONSES_ENDPOINT") || arkEndpoint;
+    const streamOpenAiChat = view === "agent" && useOpenAiChat && !isDocumentOutputTask;
     const requestPayload = isDocumentOutputTask
       ? {
           model: agentModel,
@@ -1986,7 +2153,7 @@ export async function handleZerlumAgent(request: RequestLike, response: Response
       : useOpenAiChat
         ? {
             model: agentModel,
-            stream: true,
+            stream: streamOpenAiChat,
             messages: [
               {
                 role: "user",
@@ -2004,6 +2171,7 @@ export async function handleZerlumAgent(request: RequestLike, response: Response
               },
             ],
           };
+    const canFallbackToArkAgent = view === "agent" && useOpenAiChat && !isDocumentOutputTask && arkApiKey;
     const upstreamController = isDocumentOutputTask ? new AbortController() : null;
     const upstreamTimeout = isDocumentOutputTask
       ? setTimeout(() => upstreamController?.abort(), resolveDocumentOutputTimeoutMs())
@@ -2030,7 +2198,27 @@ export async function handleZerlumAgent(request: RequestLike, response: Response
         return;
       }
 
-      throw error;
+      if (canFallbackToArkAgent) {
+        upstream = await fetch(arkEndpoint, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${arkApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: arkAgentModel,
+            stream: true,
+            input: [
+              {
+                role: "user",
+                content,
+              },
+            ],
+          }),
+        });
+      } else {
+        throw error;
+      }
     } finally {
       if (upstreamTimeout) {
         clearTimeout(upstreamTimeout);
@@ -2066,14 +2254,42 @@ export async function handleZerlumAgent(request: RequestLike, response: Response
       return;
     }
 
+    if (useOpenAiChat && !streamOpenAiChat) {
+      const upstreamText = await upstream.text();
+
+      response.statusCode = upstream.status;
+      response.setHeader("Cache-Control", "no-cache");
+      response.setHeader("Connection", "keep-alive");
+
+      if (!upstream.ok) {
+        response.setHeader(
+          "Content-Type",
+          upstream.headers.get("content-type") || "application/json",
+        );
+        response.end(upstreamText);
+        return;
+      }
+
+      const agentText = (() => {
+        try {
+          return extractOpenAiChatCompletionText(JSON.parse(upstreamText));
+        } catch {
+          return upstreamText;
+        }
+      })();
+
+      response.setHeader("Content-Type", "text/event-stream");
+      writeAgentTextEvent(
+        response,
+        agentText || "模型已返回结果，但没有可显示的文本内容。",
+      );
+      response.end();
+      return;
+    }
+
     await pipeResponseBody(upstream, response);
   } catch (error) {
-    sendJson(response, 500, {
-      error:
-        error instanceof Error
-          ? error.message
-          : "Agent proxy request failed",
-    });
+    sendAgentProxyError(response, error);
   }
 }
 
@@ -2112,7 +2328,7 @@ export async function handleZerlumPrompt(request: RequestLike, response: Respons
     const imageList = images
       .map((image, index) => `${index + 1}. ${image.label || `参考图 ${index + 1}`}`)
       .join("\n");
-    const promptInstruction = [
+    const promptInstruction = withZerlumSkillContext([
       `当前节点：${nodeTitle || "图像节点"}。`,
       currentPrompt ? `用户已有提示词：${currentPrompt}` : "",
       imageList ? `已附带图片：\n${imageList}` : "",
@@ -2128,7 +2344,7 @@ export async function handleZerlumPrompt(request: RequestLike, response: Respons
       "输出开头不要使用“根据”“以下是”“下面是”“提示词：”“我将”等说明性话术。",
     ]
       .filter(Boolean)
-      .join("\n");
+      .join("\n"), { forGeneration: false });
     const requestPayload = {
       model: promptModel,
       stream: false,
@@ -2209,14 +2425,88 @@ export async function handleZerlumImage(request: RequestLike, response: Response
       return;
     }
 
-    const imageApiKey = envValue(
-      "RUNNINGHUB_IMAGE_API_KEY",
-      "NIGHT_RENDER_IMAGE_API_KEY",
-      "NIGHT_RENDER_API_TOKEN",
+    const targetResolution = normalizeUpscaleResolution(
+      String(body.resolution ?? ""),
     );
+    const targetResolutionLabel = formatResolutionLabel(targetResolution);
+    const aspectRatio = String(body.aspectRatio ?? "").trim();
     const upscaleApiKey = envValue(
       "RUNNINGHUB_UPSCALE_API_KEY",
       "NIGHT_RENDER_UPSCALE_API_KEY",
+      "NIGHT_RENDER_API_TOKEN",
+    );
+    const upscaleWebappId = resolveRunningHubUpscaleWebappId();
+    const configuredNodeInfo = envValue("RUNNINGHUB_UPSCALE_NODE_INFO");
+
+    if (shouldUseOpenAiImageProvider()) {
+      const openAiImageApiKey =
+        envValue("OPENAI_IMAGE_API_KEY", "NEWAPI_IMAGE_API_KEY") ||
+        envValue("OPENAI_DOCUMENT_OUTPUT_API_KEY") ||
+        envValue("OPENAI_API_KEY");
+      const imageModel = envValue("OPENAI_IMAGE_MODEL") || openAiDefaultImageModel;
+
+      if (!openAiImageApiKey) {
+        sendJson(response, 500, {
+          error: "Missing OPENAI_IMAGE_API_KEY",
+        });
+        return;
+      }
+
+      if (!upscaleApiKey) {
+        sendJson(response, 500, {
+          error: "Missing RUNNINGHUB_UPSCALE_API_KEY",
+        });
+        return;
+      }
+
+      const generated = await runOpenAiImageGeneration({
+        apiKey: openAiImageApiKey,
+        endpoint: resolveOpenAiResponsesEndpoint("OPENAI_IMAGE_BASE_URL"),
+        model: imageModel,
+        prompt,
+        imageUrls: [primaryImageUrl, ...referenceImageUrls],
+      });
+
+      try {
+        const upscaled = await runRunningHubUpscale({
+          apiKey: upscaleApiKey,
+          webappId: upscaleWebappId,
+          imageUrl: generated.imageUrl,
+          targetResolution,
+          configuredNodeInfo,
+        });
+
+        sendJson(response, 200, {
+          imageUrl: upscaled.imageUrl,
+          baseImageUrl: generated.imageUrl,
+          outputText: `已通过 qweapi 生图接口生成，并通过放大接口处理到 ${targetResolutionLabel}。`,
+          model: imageModel,
+          provider: "qweapi",
+          resolution: targetResolution,
+          upscaled: true,
+          taskIds: {
+            upscale: upscaled.taskId,
+          },
+        });
+        return;
+      } catch (upscaleError) {
+        sendJson(response, 200, {
+          imageUrl: generated.imageUrl,
+          outputText: `已通过 qweapi 生图接口生成，但 ${targetResolutionLabel} 放大接口未返回可用结果：${
+            upscaleError instanceof Error ? upscaleError.message : "未知错误"
+          }`,
+          model: imageModel,
+          provider: "qweapi",
+          resolution: targetResolution,
+          upscaled: false,
+        });
+        return;
+      }
+    }
+
+    const imageApiKey = envValue(
+      "RUNNINGHUB_IMAGE_API_KEY",
+      "NIGHT_RENDER_IMAGE_API_KEY",
       "NIGHT_RENDER_API_TOKEN",
     );
 
@@ -2234,11 +2524,6 @@ export async function handleZerlumImage(request: RequestLike, response: Response
       return;
     }
 
-    const targetResolution = normalizeUpscaleResolution(
-      String(body.resolution ?? ""),
-    );
-    const targetResolutionLabel = formatResolutionLabel(targetResolution);
-    const aspectRatio = String(body.aspectRatio ?? "").trim();
     const imageEndpoint =
       envValue(
         "RUNNINGHUB_IMAGE_ENDPOINT",
@@ -2248,8 +2533,6 @@ export async function handleZerlumImage(request: RequestLike, response: Response
     const imageQueryEndpoint =
       envValue("RUNNINGHUB_IMAGE_QUERY_ENDPOINT", "NIGHT_RENDER_QUERY_ENDPOINT") ||
       runningHubImageQueryEndpoint;
-    const upscaleWebappId = resolveRunningHubUpscaleWebappId();
-    const configuredNodeInfo = envValue("RUNNINGHUB_UPSCALE_NODE_INFO");
     const generated = await runRunningHubImageToImage({
       apiKey: imageApiKey,
       endpoint: imageEndpoint,
@@ -2356,10 +2639,11 @@ export async function handleZerlumVideo(request: RequestLike, response: Response
       "audio_url",
       "reference_audio",
     );
+    const skillPrompt = withZerlumSkillGenerationPrompt(prompt);
     const requestPayload = {
       model: videoModel,
       content: buildArkVideoContent({
-        prompt,
+        prompt: skillPrompt,
         referenceImages,
         referenceVideos,
         referenceAudio,

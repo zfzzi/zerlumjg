@@ -42,6 +42,8 @@ test("Vercel functions share the same provider env names as local dev", () => {
     "OPENAI_PROMPT_API_KEY",
     "OPENAI_PROMPT_BASE_URL",
     "OPENAI_DOCUMENT_OUTPUT_API_KEY",
+    "OPENAI_IMAGE_API_KEY",
+    "OPENAI_IMAGE_BASE_URL",
     "ARK_API_KEY",
     "RUNNINGHUB_IMAGE_API_KEY",
     "RUNNINGHUB_UPSCALE_API_KEY",

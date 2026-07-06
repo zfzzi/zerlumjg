@@ -13,7 +13,7 @@ const viteSource = readFileSync(
 const localEnv = readFileSync(new URL("../.env.local", import.meta.url), "utf8");
 const videoProxyBlock = viteSource.slice(
   viteSource.indexOf('server.middlewares.use("/api/zerlum-video"'),
-  viteSource.indexOf('server.middlewares.use("/api/open-local-folder"'),
+  viteSource.indexOf('server.middlewares.use("/api/zerlum-video-status"'),
 );
 
 test("video generation uses the Ark Seedance task proxy", () => {

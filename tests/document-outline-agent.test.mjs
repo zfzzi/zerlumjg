@@ -61,11 +61,11 @@ test("outline proxy constraints do not force verbose chapter explanations", () =
 });
 
 test("outline proxy bypasses local agent and knowledge prompts", () => {
-  assert.match(systemPromptBuilderBlock, /includeAgentInstructions\?: boolean/);
-  assert.match(
-    systemPromptBuilderBlock,
-    /const agentInstructions = includeAgentInstructions\s*\?\s*routes/,
-  );
+  assert.match(systemPromptBuilderBlock, /照明设计工具平台/);
+  assert.match(systemPromptBuilderBlock, /只依据用户输入、上传资料、当前项目基础信息/);
+  assert.doesNotMatch(systemPromptBuilderBlock, /readAgentInstruction/);
+  assert.doesNotMatch(systemPromptBuilderBlock, /retrieveKnowledgeContext/);
+  assert.doesNotMatch(systemPromptBuilderBlock, /markdown-chunks\.jsonl/);
   assert.match(agentProxyBlock, /const systemPrompt = isOutlineTask\s*\?\s*""\s*:\s*buildZerlumSystemPrompt/);
   assert.match(agentProxyBlock, /isOutlineTask\s*\?\s*"请以 Zerlum照明系统身份回答，只依据用户上传资料和当前项目基础信息生成大纲。"/);
   assert.doesNotMatch(agentProxyBlock, /Zerlum Outline Agent 身份/);

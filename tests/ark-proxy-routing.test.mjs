@@ -20,6 +20,14 @@ const apiPromptHandlerBlock = apiServerSource.slice(
   apiServerSource.indexOf("export async function handleZerlumPrompt"),
   apiServerSource.indexOf("export async function handleZerlumImage"),
 );
+const apiAgentHandlerBlock = apiServerSource.slice(
+  apiServerSource.indexOf("export async function handleZerlumAgent"),
+  apiServerSource.indexOf("export async function handleZerlumPrompt"),
+);
+const apiAgentPromptBlock = apiServerSource.slice(
+  apiServerSource.indexOf("function buildAgentPrompt"),
+  apiServerSource.indexOf("function collectImageCandidates"),
+);
 
 test("agent proxy routes main and outline to Chat Completions and document output to Responses", () => {
   assert.match(
@@ -95,11 +103,27 @@ test("agent proxy sends Ark Responses image and text content for non-main routes
   assert.match(agentProxyBlock, /input:\s*\[\s*\{\s*role:\s*"user",\s*content,/);
 });
 
-test("canvas visual prompts preserve source image structure and perspective", () => {
+test("canvas visual agent uses the layered lighting design frame instead of the old night-only prompt mode", () => {
+  for (const backendBlock of [agentProxyBlock, apiAgentPromptBlock]) {
+    assert.match(backendBlock, /AI无限画布照明设计框架/);
+    assert.match(
+      backendBlock,
+      /根据用户任务选择输出形式：提示词、画面分析、修改建议或照明设计说明/,
+    );
+    assert.match(backendBlock, /室内、室外建筑、景观、文旅夜游、视频镜头或不确定/);
+    assert.match(backendBlock, /用户参考图、文字要求和画布节点关系优先/);
+    assert.match(backendBlock, /不要机械套用固定蓝调室外夜景模板/);
+    assert.doesNotMatch(backendBlock, /只输出两段：场景判断依据、夜景效果图提示词/);
+    assert.doesNotMatch(backendBlock, /只生成夜景效果图提示词相关内容/);
+  }
+
   assert.match(
-    agentProxyBlock,
-    /生成或优化提示词时，必须明确要求与原图结构、构图、主体位置、镜头视角和透视关系保持一致/,
+    appSource,
+    /基于画布图片、节点关系和用户要求，生成或优化照明设计视觉提示词/,
   );
+  assert.match(appSource, /视频镜头或不确定类型/);
+  assert.match(appSource, /用户参考图、文字要求和画布节点关系优先/);
+  assert.doesNotMatch(appSource, /当前任务是为图片节点生成夜景照明效果图提示词/);
 });
 
 test("canvas prompt proxy adapts night render prompts to indoor or outdoor scenes", () => {
@@ -148,6 +172,62 @@ test("agent proxy converts content to Chat Completions parts for main agent", ()
   assert.match(agentProxyBlock, /input_audio:\s*\{\s*data:\s*audio\.audioBase64,\s*format:\s*"wav",\s*\}/);
   assert.match(agentProxyBlock, /type:\s*"text"/);
   assert.match(agentProxyBlock, /text:\s*enrichedMessage/);
+});
+
+test("main agent streams OpenAI chat tokens while outline wraps non-streaming results", () => {
+  for (const backendSource of [source, apiServerSource]) {
+    assert.match(backendSource, /function extractOpenAiChatCompletionText/);
+  }
+
+  for (const backendBlock of [agentProxyBlock, apiAgentHandlerBlock]) {
+    assert.match(
+      backendBlock,
+      /const streamOpenAiChat = view === "agent" && useOpenAiChat && !isDocumentOutputTask;/,
+    );
+    assert.match(backendBlock, /useOpenAiChat\s*\?\s*\{\s*model: agentModel,\s*stream: streamOpenAiChat,\s*messages:/);
+    const openAiChatResponseBlock = backendBlock.slice(
+      backendBlock.indexOf("if (useOpenAiChat && !streamOpenAiChat) {"),
+      backendBlock.indexOf("await pipeResponseBody"),
+    );
+
+    assert.match(openAiChatResponseBlock, /const upstreamText = await upstream\.text\(\);/);
+    assert.match(openAiChatResponseBlock, /extractOpenAiChatCompletionText\(JSON\.parse\(upstreamText\)\)/);
+    assert.match(openAiChatResponseBlock, /writeAgentTextEvent\(\s*response,\s*agentText/);
+  }
+});
+
+test("main agent falls back to Ark when the OpenAI-compatible chat request cannot connect", () => {
+  for (const backendBlock of [agentProxyBlock, apiAgentHandlerBlock]) {
+    assert.match(backendBlock, /const arkApiKey =/);
+    assert.match(backendBlock, /const arkAgentModel =/);
+    assert.match(
+      backendBlock,
+      /const canFallbackToArkAgent = view === "agent" && useOpenAiChat && !isDocumentOutputTask && arkApiKey;/,
+    );
+    assert.match(
+      backendBlock,
+      /catch \(error\) \{[\s\S]*if \(canFallbackToArkAgent\) \{[\s\S]*upstream = await fetch\([^,]*arkEndpoint/,
+    );
+    assert.match(backendBlock, /Authorization: `Bearer \$\{arkApiKey\}`/);
+    assert.match(backendBlock, /model: arkAgentModel/);
+    assert.match(
+      backendBlock,
+      /input:\s*\[\s*\{\s*role:\s*"user",\s*content,/,
+    );
+  }
+});
+
+test("agent proxy does not reset headers after a streaming response starts", () => {
+  for (const backendSource of [source, apiServerSource]) {
+    assert.match(backendSource, /function sendAgentProxyError/);
+    assert.match(backendSource, /headersSent/);
+    assert.match(backendSource, /writableEnded/);
+    assert.match(backendSource, /JSON\.stringify\(\{\s*error: message\s*\}\)/);
+  }
+
+  for (const backendBlock of [agentProxyBlock, apiAgentHandlerBlock]) {
+    assert.match(backendBlock, /catch \(error\) \{[\s\S]*sendAgentProxyError\(response, error\);[\s\S]*\}/);
+  }
 });
 
 test("outline agent uses the OpenAI-compatible qweapi model without Ark web search tools", () => {

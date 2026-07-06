@@ -1,9 +1,6 @@
 node_modules/
 dist/
-knowledge/*
-!knowledge/desktop-lighting-library/
-knowledge/desktop-lighting-library/*
-!knowledge/desktop-lighting-library/markdown-index.json
+knowledge/
 database/
 databases/
 data/database/

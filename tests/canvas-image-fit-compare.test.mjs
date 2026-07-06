@@ -146,9 +146,9 @@ test("canvas dot array fades out at the furthest zoom level", () => {
   );
 });
 
-test("Zerlum Visual prompt preserves source image structure and perspective", () => {
+test("Zerlum Visual prompt preserves source image structure, perspective, scale, and material", () => {
   assert.match(
     appSource,
-    /生成提示词时必须要求与原图结构、构图、主体位置、镜头视角和透视关系保持一致/,
+    /必须保持原图结构、构图、主体位置、镜头视角、透视关系、建筑比例和主要材质不变/,
   );
 });

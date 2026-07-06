@@ -21,18 +21,21 @@ test("agent composer records microphone input and encodes it as wav audio", () =
   assert.match(stylesSource, /\.agent-icon-action\.recording/);
 });
 
-test("zerlum agent and canvas visual submit microphone audio to the agent proxy", () => {
-  assert.match(
-    appSource,
-    /async function handleAgentSubmit\(\s*voiceInput\?: AgentVoiceInput/,
-  );
-  assert.match(appSource, /audio:\s*voiceInput/);
-  assert.match(appSource, /onVoiceSubmit=\{handleAgentVoiceSubmit\}/);
+test("canvas visual submits microphone audio to the agent proxy", () => {
   assert.match(
     appSource,
     /async function submitVisualMessage\(\s*voiceInput\?: AgentVoiceInput/,
   );
+  assert.match(appSource, /audio:\s*voiceInput/);
   assert.match(appSource, /onVoiceSubmit=\{submitVisualVoiceMessage\}/);
+});
+
+test("zerlum agent submits microphone audio to the agent proxy", () => {
+  assert.match(
+    appSource,
+    /function handleAgentVoiceSubmit\(\s*voiceInput: AgentVoiceInput,\s*textInstruction: string,/,
+  );
+  assert.match(appSource, /onVoiceSubmit=\{handleAgentVoiceSubmit\}/);
 });
 
 test("microphone permission errors show an actionable Chinese message", () => {
