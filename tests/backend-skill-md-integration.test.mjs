@@ -15,6 +15,7 @@ const apiImageRouteSource = apiServerSource.slice(
   apiServerSource.indexOf("export async function handleZerlumVideo"),
 );
 const skillHelperPath = join(root, "api", "zerlum-skill.js");
+const skillHelperTypesPath = join(root, "api", "zerlum-skill.d.ts");
 const oldSkillMarkdownPath = join(root, "api", "zerlum-facade-lighting-skill.md");
 const skillRootPath = join(root, "api", "zerlum-lighting-skill");
 const expectedSkillFiles = [
@@ -57,8 +58,10 @@ test("backend replaces the old monolithic skill markdown with layered lighting d
 
 test("backend exposes a shared skill context helper", () => {
   assert.equal(existsSync(skillHelperPath), true);
+  assert.equal(existsSync(skillHelperTypesPath), true);
 
   const skillHelperSource = readFileSync(skillHelperPath, "utf8");
+  const skillHelperTypes = readFileSync(skillHelperTypesPath, "utf8");
   assert.match(skillHelperSource, /zerlum-lighting-skill\/SKILL\.md/);
   assert.match(skillHelperSource, /07-variation-variables\.md/);
   assert.doesNotMatch(skillHelperSource, /zerlum-facade-lighting-skill\.md/);
@@ -66,6 +69,9 @@ test("backend exposes a shared skill context helper", () => {
   assert.match(skillHelperSource, /function withZerlumSkillContext/);
   assert.match(skillHelperSource, /function withZerlumSkillGenerationPrompt/);
   assert.match(skillHelperSource, /forGeneration = true/);
+  assert.match(skillHelperTypes, /export function withZerlumSkillContext/);
+  assert.match(skillHelperTypes, /forGeneration\?: boolean/);
+  assert.match(skillHelperTypes, /export function withZerlumSkillGenerationPrompt/);
 });
 
 test("skill context sent to model calls stays within a safe request size", async () => {
