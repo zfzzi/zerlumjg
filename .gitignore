@@ -1,0 +1,16 @@
+node_modules/
+dist/
+knowledge/*
+!knowledge/desktop-lighting-library/
+knowledge/desktop-lighting-library/*
+!knowledge/desktop-lighting-library/markdown-index.json
+database/
+databases/
+data/database/
+*.log
+verification-*.png
+.env
+.env.*
+!.env.example
+
+.vercel
