@@ -453,6 +453,20 @@ function getAgentStreamErrorMessage(error: unknown) {
   return message || code;
 }
 
+function normalizeAgentErrorMessage(message: string, fallback: string) {
+  const text = message.trim();
+
+  if (!text) {
+    return fallback;
+  }
+
+  if (/terminated|aborted|AbortError|network|fetch failed/i.test(text)) {
+    return "请求连接已中断，请重新发送。";
+  }
+
+  return text;
+}
+
 function parseApiErrorText(rawText: string, fallback: string) {
   const text = rawText.trim();
 
@@ -465,18 +479,18 @@ function parseApiErrorText(rawText: string, fallback: string) {
     const payloadError = getAgentStreamErrorMessage(payload.error);
 
     if (payloadError) {
-      return payloadError;
+      return normalizeAgentErrorMessage(payloadError, fallback);
     }
 
     if (typeof payload.message === "string") {
-      return payload.message;
+      return normalizeAgentErrorMessage(payload.message, fallback);
     }
 
     if (typeof payload.msg === "string") {
-      return payload.msg;
+      return normalizeAgentErrorMessage(payload.msg, fallback);
     }
   } catch {
-    return text;
+    return normalizeAgentErrorMessage(text, fallback);
   }
 
   return fallback;
@@ -697,6 +711,10 @@ function getCanvasNodeMediaUrl(node: CanvasNode) {
   return getSelectedCanvasVersion(node)?.url || node.uploadUrl || "";
 }
 
+function hasCanvasImageOutput(node: CanvasNode) {
+  return node.kind === "image" && Boolean(getCanvasNodeMediaUrl(node));
+}
+
 function isUploadedCanvasImageNode(node: CanvasNode) {
   const version = getSelectedCanvasVersion(node);
 
@@ -845,7 +863,7 @@ function canConnectCanvasNodes(source: CanvasNode, target: CanvasNode) {
   }
 
   if (source.kind === "image" && target.kind === "image") {
-    return isUploadedCanvasImageNode(source) && !isUploadedCanvasImageNode(target);
+    return hasCanvasImageOutput(source) && !isUploadedCanvasImageNode(target);
   }
 
   if (source.kind === "video" && target.kind === "image") {
@@ -1166,7 +1184,12 @@ function buildDocumentPageImagePrompt(page: DocumentOutlinePage, totalPages: num
     "你是 Zerlum image2 方案图片生成 Agent。",
     `只生成第 ${page.pageNumber}/${totalPages} 页图片方案。`,
     "当前任务是分批单页生成，不要把其他页合并到这一张图里。",
-    "输出一张完整单页方案版式图片，画面中要包含本页标题、关键内容、图面或效果图区域、文字层级和留白关系。",
+    "输出一张完整单页方案版式图片，画面中要包含本页标题、关键内容、主要视觉元素、文字层级和留白关系。",
+    "严格按大纲中的“页面类型”设计本页。",
+    "如果本页不是效果图页，不要把画布生成图铺满当作主视觉。",
+    "只有大纲明确写成效果图页、重点空间渲染页或前后对比页时，才把效果图作为主视觉。",
+    "非效果图页优先使用概念叙事、材质/光影板、平面/节点分析、灯光策略图、动线或时间线等高级方案表达。",
+    "可以少量引用画布生成图作为局部裁切、氛围证据或辅助图，不要机械铺满整页。",
     "严格遵循本页大纲里的排版风格、字体要求、内容位置和图文层级。",
     "不要输出多页拼图，不要生成无关页面，不要添加虚构项目事实。",
     "",
@@ -1614,8 +1637,28 @@ function estimateDataUrlBytes(value: string) {
   return new TextEncoder().encode(value).length;
 }
 
-async function blobUrlToDataUrl(imageUrl: string) {
-  const blob = await fetch(imageUrl).then((response) => response.blob());
+function shouldInlineImageUrlForAgentApi(imageUrl: string) {
+  if (!/^https?:\/\//i.test(imageUrl) || typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    const url = new URL(imageUrl, window.location.href);
+
+    return url.origin === window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
+async function imageUrlToDataUrl(imageUrl: string) {
+  const response = await fetch(imageUrl);
+
+  if (!response.ok) {
+    throw new Error("图片读取失败。");
+  }
+
+  const blob = await response.blob();
 
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -1674,12 +1717,15 @@ async function resolveImageUrlForAgentApi(imageUrl?: string) {
     return "";
   }
 
-  if (/^https?:\/\//i.test(imageUrl)) {
+  if (
+    /^https?:\/\//i.test(imageUrl) &&
+    !shouldInlineImageUrlForAgentApi(imageUrl)
+  ) {
     return imageUrl;
   }
 
-  const dataUrl = imageUrl.startsWith("blob:")
-    ? await blobUrlToDataUrl(imageUrl)
+  const dataUrl = imageUrl.startsWith("blob:") || shouldInlineImageUrlForAgentApi(imageUrl)
+    ? await imageUrlToDataUrl(imageUrl)
     : imageUrl;
 
   return compressImageForAgentApi(dataUrl);
@@ -1694,7 +1740,7 @@ async function resolveMediaUrlForAgentApi(mediaUrl?: string) {
     return mediaUrl;
   }
 
-  return mediaUrl.startsWith("blob:") ? blobUrlToDataUrl(mediaUrl) : mediaUrl;
+  return mediaUrl.startsWith("blob:") ? imageUrlToDataUrl(mediaUrl) : mediaUrl;
 }
 
 async function readAvatarFileAsDataUrl(file: File) {
@@ -2264,7 +2310,9 @@ function App() {
       }
 
       if (streamError) {
-        throw new Error(streamError);
+        throw new Error(
+          normalizeAgentErrorMessage(streamError, "Zerlum Agent 暂时无法响应。"),
+        );
       }
 
       setAgentMessages((current) =>
@@ -2279,10 +2327,10 @@ function App() {
         ),
       );
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : "Zerlum Agent 连接失败，请稍后再试。";
+      const message = normalizeAgentErrorMessage(
+        error instanceof Error ? error.message : "",
+        "Zerlum Agent 连接失败，请稍后再试。",
+      );
 
       setAgentMessages((current) =>
         current.map((item) =>
@@ -3225,6 +3273,7 @@ function Workspace({
             permissions={permissions}
             project={project}
             materials={projectMaterials}
+            agentMessages={agentMessages}
             onUploadMaterials={onProjectMaterialsUpload}
             userName={currentMember.name}
             userAvatarUrl={currentMember.avatarUrl}
@@ -4594,19 +4643,18 @@ function CanvasView({
   }
 
   async function resolveImageUrlForApi(imageUrl?: string) {
-    if (!imageUrl || !imageUrl.startsWith("blob:")) {
+    if (!imageUrl) {
       return imageUrl;
     }
 
-    const blob = await fetch(imageUrl).then((response) => response.blob());
+    if (
+      !imageUrl.startsWith("blob:") &&
+      !shouldInlineImageUrlForAgentApi(imageUrl)
+    ) {
+      return imageUrl;
+    }
 
-    return new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onload = () => resolve(String(reader.result));
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(blob);
-    });
+    return compressImageForAgentApi(await imageUrlToDataUrl(imageUrl));
   }
 
   async function collectVisualAgentImages() {
@@ -6580,14 +6628,19 @@ function UnifiedCanvasView({
         images,
       }),
     });
-    const payload = (await response.json()) as {
+    const responseText = await response.text();
+
+    if (!response.ok) {
+      throw new Error(parseApiErrorText(responseText, "提示词生成失败"));
+    }
+
+    const payload = JSON.parse(responseText) as {
       prompt?: string;
-      error?: string;
     };
     const finalPrompt = payload.prompt?.trim() ?? "";
 
-    if (!response.ok || !finalPrompt) {
-      throw new Error(payload.error || "提示词生成失败");
+    if (!finalPrompt) {
+      throw new Error("提示词生成失败");
     }
 
     return finalPrompt;
@@ -9430,6 +9483,7 @@ function TextView({
   permissions,
   project,
   materials,
+  agentMessages,
   onUploadMaterials,
   userName,
   userAvatarUrl,
@@ -9452,6 +9506,7 @@ function TextView({
   permissions: Permissions;
   project: Project;
   materials: ProjectMaterial[];
+  agentMessages: AgentChatMessage[];
   onUploadMaterials: (files: FileList | File[]) => void;
   userName: string;
   userAvatarUrl: string | undefined;
@@ -9506,28 +9561,70 @@ function TextView({
               `- ${material.name}（${formatFileSize(material.size)}，${material.type || "未知格式"}，${material.uploadedAt}）`,
           )
           .join("\n")
-      : "目前没有收到资料，请先上传项目资料后再生成大纲。";
+      : "暂无用户提交资料。";
+    const materialContent = currentProjectMaterials.length
+      ? currentProjectMaterials
+          .map((material, index) => {
+            const sourceText = material.sourceText?.trim();
+            const sourceNote = sourceText
+              ? `\n  源文本摘录：${sourceText.slice(0, 6000)}`
+              : material.sourceDataUrl?.startsWith("data:image/")
+                ? "\n  图片资料：已作为用户提交资料上传，请结合可见画面判断。"
+                : "\n  暂无可直接读取的源文本。";
+
+            return `${index + 1}. ${material.name}${sourceNote}`;
+          })
+          .join("\n\n")
+      : "暂无用户提交资料。";
+    const agentOutputSummary = agentMessages
+      .filter(
+        (message) =>
+          message.role === "assistant" &&
+          message.status !== "error" &&
+          message.text.trim(),
+      )
+      .slice(-8)
+      .map((message, index) => `${index + 1}. ${message.text.trim().slice(0, 3000)}`)
+      .join("\n\n") || "暂无 Zerlum Agent 聊天输出。";
+    const canvasImageSummary = canvasGeneratedImages.length
+      ? canvasGeneratedImages
+          .slice(0, 8)
+          .map((image, index) => `${index + 1}. ${image.label || `画布生成图 ${index + 1}`}`)
+          .join("\n")
+      : "暂无画布生成图片。";
 
     return [
       "你是 Zerlum照明系统的大纲生成模块。",
       "对外说明身份时，只说“我是 Zerlum照明系统”。",
-      "你的信息只来自用户上传资料和当前项目基础信息。",
-      "不要调用或引用任何 agent.md、Zerlum 知识库、数据库或联网检索结果。",
-      "如果已收到用户上传资料，就只根据这些资料和项目基础信息生成简洁大纲。",
-      "如果目前没有收到用户上传资料，就回复：目前没有收到资料，请先上传项目资料后再生成大纲。",
+      "你的信息只来自用户提交资料、Zerlum Agent 聊天输出和画布生成图片。",
+      "同时遵循已挂载的 Lighting Skill 9 个 md 作为照明设计专业约束。",
+      "不要调用或引用任何 agent.md、数据库或联网检索结果。",
+      "Lighting Skill 只能作为专业方法约束，不能当作项目事实来源。",
+      "不要读取或引用平台页面信息、项目卡片字段、导航状态或任何未显式传入的页面内容。",
+      "如果已收到任一来源，就只根据这些显式输入生成简洁大纲。",
+      "如果目前没有收到用户提交资料、Agent 输出或画布图片，就回复：目前没有收到可用于生成大纲的资料。",
       "先用一句话说明身份和信息来源，再输出大纲；不要解释推理过程，不要输出正文示例。",
       "版式默认 16:9 横屏。",
       "大纲开头必须先写清楚排版风格和字体要求。",
+      "先判断项目类型、空间气质、目标受众和显式资料里可推导的表达风格。",
+      "给出 2-3 条视觉路线，并选择最适合本项目的一条作为整套方案基调。",
+      "不要让整套方案全篇都放画布生成效果图。",
+      "效果图页只用于封面、重点空间、关键体验或前后对比等必要页面。",
+      "其余页面应使用概念叙事、材质/光影板、平面/节点分析、灯光策略图、动线或时间线等页面类型。",
+      "每页必须标注页面类型、主要视觉元素、是否使用画布生成图以及使用方式。",
       "随后逐页写清楚每页的排版内容、版面位置和图文层级。",
-      "",
-      "【当前项目基础信息】",
-      `项目名称：${project.name || "未命名项目"}`,
-      `项目类型：${project.type || "未填写"}`,
-      `客户名称：${project.client || "未填写"}`,
-      `项目阶段：${project.stage || "未填写"}`,
       "",
       "【已上传项目资料清单】",
       materialSummary,
+      "",
+      "【用户提交资料内容】",
+      materialContent,
+      "",
+      "【Zerlum Agent 聊天输出】",
+      agentOutputSummary,
+      "",
+      "【画布生成图片】",
+      canvasImageSummary,
       "",
       `用户原始要求：${userRequest}`,
       "",
@@ -9568,16 +9665,6 @@ function TextView({
         view: "text",
         agentTask,
         message,
-        project:
-          agentTask === "document-output"
-            ? {
-                name: project.name,
-              }
-            : {
-                name: project.name,
-                type: project.type,
-                client: project.client,
-              },
         materials,
         images,
       }),
@@ -9585,7 +9672,7 @@ function TextView({
 
     if (!response.ok || !response.body) {
       const fallback = await response.text();
-      throw new Error(fallback || finalFallback);
+      throw new Error(parseApiErrorText(fallback, finalFallback));
     }
 
     const reader = response.body.getReader();
@@ -9654,7 +9741,9 @@ function TextView({
     }
 
     if (streamError) {
-      throw new Error(streamError);
+      throw new Error(
+        normalizeAgentErrorMessage(streamError, finalFallback),
+      );
     }
 
     const finalText = assistantText || finalFallback;
@@ -9696,19 +9785,28 @@ function TextView({
       status: "streaming",
     };
     const agentPrompt = buildOutlineAgentContext(message);
+    const hasOutlineInputs =
+      materials.length > 0 ||
+      agentMessages.some(
+        (item) =>
+          item.role === "assistant" &&
+          item.status !== "error" &&
+          item.text.trim(),
+      ) ||
+      canvasGeneratedImages.some((image) => image.imageUrl.trim());
 
     setDocumentInput("");
     setOutline("");
     setDocumentOutput("");
     setDocumentOutputPages([]);
 
-    if (!materials.length) {
+    if (!hasOutlineInputs) {
       setDocumentMessages((current) => [
         ...current,
         userMessage,
         {
           ...assistantMessage,
-          text: "我是 Zerlum照明系统。我的信息只来自用户上传资料和当前项目基础信息。目前没有收到资料，请先上传项目资料后再生成大纲。",
+          text: "我是 Zerlum照明系统。我的信息只来自用户提交资料、Zerlum Agent 聊天输出和画布生成图片。目前没有收到可用于生成大纲的资料。",
           status: "done",
         },
       ]);
@@ -9729,12 +9827,13 @@ function TextView({
         onText: setOutline,
         finalFallback: "方案 Agent 暂时没有返回可用大纲。",
         agentTask: "outline",
+        images: canvasGeneratedImages,
       });
     } catch (error) {
-      const errorText =
-        error instanceof Error
-          ? error.message
-          : "方案 Agent 连接失败，请稍后再试。";
+      const errorText = normalizeAgentErrorMessage(
+        error instanceof Error ? error.message : "",
+        "方案 Agent 连接失败，请稍后再试。",
+      );
       setDocumentMessages((current) =>
         current.map((item) =>
           item.id === assistantId

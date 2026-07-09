@@ -18,7 +18,7 @@ const openAiDefaultBaseUrl = "https://api.openai.com";
 const openAiDefaultAgentModel = "gpt-4o-mini";
 const openAiDefaultDocumentOutputModel = "gpt-image-2";
 const openAiDefaultImageModel = "gpt-image-2";
-const openAiDefaultDocumentOutputTimeoutMs = 180_000;
+const openAiDefaultDocumentOutputTimeoutMs = 600_000;
 const arkDefaultAgentModel = "doubao-seed-2-1-pro-260628";
 const arkDefaultVideoModel = "doubao-seedance-2-0-260128";
 const arkDefaultVideoWaitTimeoutMs = 300_000;
@@ -35,15 +35,15 @@ const runningHubAppRunEndpoint = `${runningHubBaseUrl}/task/openapi/ai-app/run`;
 const runningHubAppOutputsEndpoint = `${runningHubBaseUrl}/task/openapi/outputs`;
 const runningHubAppStatusEndpoint = `${runningHubBaseUrl}/task/openapi/status`;
 const runningHubAppDemoEndpoint = `${runningHubBaseUrl}/api/webapp/apiCallDemo`;
-const runningHubDefaultUpscaleWebappId = "2063809922772594690";
+const runningHubDefaultUpscaleWebappId = "2074155000317702146";
 const runningHubDefaultUpscaleAppPath = `/run/ai-app/${runningHubDefaultUpscaleWebappId}`;
 const runningHubDefaultResolution = "1k";
 const runningHubDefaultUpscaleResolution = "4k";
 const runningHubUpscaleResolutionValues = {
-  "2k": "0.2",
-  "4k": "0.4",
-  "6k": "0.6",
-  "8k": "0.8",
+  "2k": "2",
+  "4k": "3",
+  "6k": "4",
+  "8k": "5",
 } as const;
 const runningHubDefaultAspectRatio = "1:1";
 
@@ -594,6 +594,29 @@ function buildDocumentMaterialContent(
   });
 }
 
+function buildOutlineMaterialContext(
+  materials: ReturnType<typeof normalizeProjectMaterialInputs>,
+) {
+  if (!materials.length) {
+    return "";
+  }
+
+  return [
+    "\n用户提交资料：",
+    materials
+      .map((material, index) => {
+        const sourceText = material.sourceText
+          ? `\n源文本摘录：${material.sourceText.slice(0, 12_000)}`
+          : material.sourceDataUrl
+            ? "\n已收到源文件或图片附件，请结合显式传入内容判断。"
+            : "\n暂无可直接读取的源文本。";
+
+        return `${index + 1}. ${material.name}${sourceText}`;
+      })
+      .join("\n\n"),
+  ].join("\n");
+}
+
 function buildAgentPrompt({
   message,
   view,
@@ -613,7 +636,7 @@ function buildAgentPrompt({
 }) {
   const isOutlineTask = view === "text" && agentTask === "outline";
   const isDocumentOutputTask = view === "text" && agentTask === "document-output";
-  const projectText = project
+  const projectText = project && !isOutlineTask && !isDocumentOutputTask
     ? isDocumentOutputTask
       ? `\n\n当前项目：${String(project.name || "未命名项目")}。`
       : `\n\n当前项目：${String(project.name || "未命名项目")}；类型：${String(
@@ -626,6 +649,8 @@ function buildAgentPrompt({
           .filter((item) => item.sourceDataUrl || item.sourceText)
           .map((item) => item.name)
           .join("、") || "暂无可直接读取的源文件"}。`
+      : isOutlineTask
+        ? buildOutlineMaterialContext(materials)
       : `\n已上传资料：${materials.map((item) => item.name).join("、")}。`
     : "";
   const imageContext = agentImages.length
@@ -653,24 +678,33 @@ function buildAgentPrompt({
     ? [
         "【Zerlum Outline 输出约束】",
         "说明身份时，只说“我是 Zerlum照明系统”。",
-        "你的信息只来自用户上传资料和当前项目基础信息。",
-        "不得调用、引用或声称使用任何 agent.md、Zerlum 知识库、数据库或联网检索结果。",
-        "收到资料时，输出简洁大纲；没有资料时，只说明目前没有收到资料。",
+        "你的信息只来自用户提交资料、Zerlum Agent 聊天输出和画布生成图片。",
+        "必须遵循已挂载的 Lighting Skill 9 个 md 作为照明设计专业约束。",
+        "不得调用、引用或声称使用任何 agent.md、数据库或联网检索结果。",
+        "Lighting Skill 不能当作项目事实来源。",
+        "不得读取或引用平台页面信息、项目卡片字段、导航状态或任何未显式传入的页面内容。",
+        "收到任一来源时，输出简洁大纲；没有资料、Agent 输出或画布图片时，只说明目前没有收到可用于生成大纲的资料。",
         "版式默认 16:9 横屏。",
         "大纲开头必须先写清楚排版风格和字体要求。",
+        "先判断项目类型、空间气质、目标受众和显式资料里可推导的表达风格。",
+        "给出 2-3 条视觉路线，并选择最适合本项目的一条作为整套方案基调。",
+        "不要让整套方案全篇都放画布生成效果图。",
+        "效果图页只用于封面、重点空间、关键体验或前后对比等必要页面。",
+        "其余页面应使用概念叙事、材质/光影板、平面/节点分析、灯光策略图、动线或时间线等页面类型。",
+        "每页必须标注页面类型、主要视觉元素、是否使用画布生成图以及使用方式。",
         "随后逐页写清楚每页的排版内容、版面位置和图文层级。",
         "不要输出正文、示例、推理过程、引用清单或额外解释。",
       ].join("\n")
     : "";
   const agentInstruction = isOutlineTask
-    ? "请以 Zerlum照明系统身份回答，只依据用户上传资料和当前项目基础信息生成大纲。"
+    ? "请以 Zerlum照明系统身份回答，只依据用户提交资料、Zerlum Agent 聊天输出和画布生成图片生成大纲，同时遵循已挂载 Lighting Skill 9 个 md 的照明设计方法。"
     : view === "canvas"
       ? "请按 AI 无限画布照明设计框架回答：根据用户意图输出提示词、画面分析、修改建议或照明设计说明，并让后端分层灯光设计框架的场景判断、设计工具箱和差异化变量参与判断。"
       : agentImages.length
-        ? "请以 Zerlum 视觉助手身份先观察附带图片，再基于用户输入、上传资料和当前项目基础信息给出画面理解、提示词建议、问题判断和可执行修改建议；提示词建议必须要求与原图结构、构图、主体位置、镜头视角和透视关系保持一致。"
+        ? "请以 Zerlum 视觉助手身份先观察附带图片，再基于用户输入、上传资料和显式传入的图片给出画面理解、提示词建议、问题判断和可执行修改建议；提示词建议必须要求与原图结构、构图、主体位置、镜头视角和透视关系保持一致。"
         : agentAudio.length
-          ? "请以 Zerlum 照明设计助手身份先识别附带语音，再基于用户输入、上传资料和当前项目基础信息回答语音里的请求。"
-          : "请以 Zerlum 照明设计助手身份回答，并基于用户输入、上传资料和当前项目基础信息说明依据、假设和需要复核的地方。";
+          ? "请以 Zerlum 照明设计助手身份先识别附带语音，再基于用户输入、上传资料和显式传入的语音内容回答语音里的请求。"
+          : "请以 Zerlum 照明设计助手身份回答，并基于用户输入和上传资料说明依据、假设和需要复核的地方。";
 
   const basePrompt = [
     canvasVisualInstruction,
@@ -687,7 +721,9 @@ function buildAgentPrompt({
     .filter(Boolean)
     .join("\n");
 
-  return withZerlumSkillContext(basePrompt);
+  return isOutlineTask
+    ? withZerlumSkillContext(basePrompt, { forGeneration: false })
+    : withZerlumSkillContext(basePrompt);
 }
 
 function collectImageCandidates(value: unknown, keyHint = ""): string[] {
@@ -2324,7 +2360,7 @@ export async function handleZerlumPrompt(request: RequestLike, response: Respons
     const promptModel =
       envValue("OPENAI_PROMPT_MODEL", "OPENAI_AGENT_MODEL") ||
       openAiDefaultAgentModel;
-    const promptEndpoint = resolveOpenAiResponsesEndpoint("OPENAI_PROMPT_BASE_URL");
+    const promptEndpoint = resolveOpenAiChatEndpoint("OPENAI_PROMPT_BASE_URL");
     const imageList = images
       .map((image, index) => `${index + 1}. ${image.label || `参考图 ${index + 1}`}`)
       .join("\n");
@@ -2348,16 +2384,18 @@ export async function handleZerlumPrompt(request: RequestLike, response: Respons
     const requestPayload = {
       model: promptModel,
       stream: false,
-      input: [
+      messages: [
         {
           role: "user",
           content: [
             ...images.map((image) => ({
-              type: "input_image",
-              image_url: image.imageUrl,
+              type: "image_url",
+              image_url: {
+                url: image.imageUrl,
+              },
             })),
             {
-              type: "input_text",
+              type: "text",
               text: promptInstruction,
             },
           ],
@@ -2384,7 +2422,7 @@ export async function handleZerlumPrompt(request: RequestLike, response: Respons
       return;
     }
 
-    const prompt = extractDocumentOutputText(JSON.parse(upstreamText));
+    const prompt = extractOpenAiChatCompletionText(JSON.parse(upstreamText));
 
     sendJson(response, 200, { prompt: cleanCanvasPromptOutput(prompt) });
   } catch (error) {

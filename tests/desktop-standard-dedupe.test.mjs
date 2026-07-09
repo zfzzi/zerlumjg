@@ -12,7 +12,7 @@ const currentStandardsDoc = readFileSync(
   "utf8",
 );
 
-test("superseded national standards are filtered before indexing", () => {
+test("superseded national standards are flagged but still indexed", () => {
   assert.equal(
     scriptModule.shouldSkipSupersededNationalStandard(
       "06_标准与规范/GB 50034-2013 建筑照明设计标准.md",
@@ -27,6 +27,29 @@ test("superseded national standards are filtered before indexing", () => {
     ),
     false,
   );
+
+  const tempRoot = mkdtempSync(join(tmpdir(), "zerlum-standards-index-"));
+
+  try {
+    writeFileSync(
+      join(tempRoot, "GB 50034-2013 建筑照明设计标准.md"),
+      "# GB 50034-2013 建筑照明设计标准\n\n旧版标准条文片段。",
+      "utf8",
+    );
+
+    const index = scriptModule.buildIndex({ sourceRoot: tempRoot });
+
+    assert.deepEqual(
+      index.documents.map((document) => document.relativePath),
+      ["GB 50034-2013 建筑照明设计标准.md"],
+    );
+    assert.equal(index.supersededNationalStandards.length, 1);
+    assert.equal(index.documents[0].supersededBy, "GB/T 50034-2024");
+    assert.equal(index.documents[0].standardStatus, "requires-current-version-check");
+    assert.equal(index.chunks[0].supersededBy, "GB/T 50034-2024");
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
 });
 
 test("current national standards registry keeps latest lighting standards", () => {

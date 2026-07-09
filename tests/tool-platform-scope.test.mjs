@@ -57,9 +57,10 @@ test("zerlum agent is rendered while removed workspace sections stay deleted", (
   assert.match(workspaceRenderBlock, /activeView === "text"/);
 });
 
-test("local uploaded markdown knowledge and bound agent instructions are removed", () => {
+test("desktop markdown and fixed agent markdown context are no longer mounted", () => {
   const agentsRoot = join(rootPath, "agents");
-  const knowledgeRoot = join(
+  const agentContextRoot = join(rootPath, "api", "zerlum-agent-context");
+  const oldKnowledgeRoot = join(
     rootPath,
     "knowledge",
     "desktop-lighting-library",
@@ -69,24 +70,23 @@ test("local uploaded markdown knowledge and bound agent instructions are removed
         .map(String)
         .filter((path) => path.endsWith("agent.md") || path === "registry.json")
     : [];
-  const knowledgeFiles = existsSync(knowledgeRoot)
-    ? readdirSync(knowledgeRoot, { recursive: true }).map(String)
+  const agentContextFiles = existsSync(agentContextRoot)
+    ? readdirSync(agentContextRoot, { recursive: true }).map(String)
     : [];
 
   assert.deepEqual(agentInstructionFiles, []);
-  assert.deepEqual(knowledgeFiles, []);
+  assert.deepEqual(agentContextFiles.sort(), []);
+  assert.equal(existsSync(oldKnowledgeRoot), true);
   assert.doesNotMatch(appSource, /desktopKnowledgeIndexJson|markdown-index\.json/);
 });
 
-test("agent proxy no longer binds local agent markdown or knowledge chunks", () => {
+test("agent proxy does not restore removed markdown instructions or context", () => {
   for (const source of [viteSource, apiServerSource]) {
     assert.doesNotMatch(source, /readAgentInstruction/);
-    assert.doesNotMatch(source, /loadKnowledgeChunks/);
-    assert.doesNotMatch(source, /retrieveKnowledgeContext/);
-    assert.doesNotMatch(source, /markdown-chunks\.jsonl/);
+    assert.doesNotMatch(source, /buildZerlumKnowledgeContext/);
     assert.doesNotMatch(source, /已加载的 Zerlum Agent 规则/);
     assert.doesNotMatch(source, /agents\/lighting-visualization\/agent\.md/);
-    assert.doesNotMatch(source, /结合 Zerlum 知识库/);
+    assert.doesNotMatch(source, /desktop-lighting-library|markdown-chunks\.jsonl|markdown-index\.json/);
   }
-  assert.doesNotMatch(viteSource, /open-local-folder|markdown-index\.json/);
+  assert.doesNotMatch(viteSource, /Zerlum 桌面照明知识库|open-local-folder|markdown-index\.json/);
 });

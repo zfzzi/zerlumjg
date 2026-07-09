@@ -1,6 +1,8 @@
 node_modules/
 dist/
-knowledge/
+knowledge/*
+!knowledge/desktop-lighting-library/
+!knowledge/desktop-lighting-library/**
 database/
 databases/
 data/database/

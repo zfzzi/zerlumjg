@@ -10,6 +10,10 @@ const viteSource = readFileSync(
   new URL("../vite.config.ts", import.meta.url),
   "utf8",
 );
+const apiServerSource = readFileSync(
+  new URL("../api/_zerlum-server.ts", import.meta.url),
+  "utf8",
+);
 const outputHandlerBlock = appSource.slice(
   appSource.indexOf("async function handleGenerateDocumentOutput"),
   appSource.indexOf("function handleExportDocument"),
@@ -31,6 +35,12 @@ test("document output splits paginated outlines and sends one image2 request per
   assert.match(appSource, /type DocumentOutputPage = DocumentOutlinePage & \{/);
   assert.match(appSource, /function splitDocumentOutlinePages\(outline: string\)/);
   assert.match(appSource, /function buildDocumentPageImagePrompt\(/);
+  assert.match(appSource, /严格按大纲中的“页面类型”设计本页。/);
+  assert.match(appSource, /如果本页不是效果图页，不要把画布生成图铺满当作主视觉。/);
+  assert.match(appSource, /只有大纲明确写成效果图页、重点空间渲染页或前后对比页时，才把效果图作为主视觉。/);
+  assert.match(appSource, /非效果图页优先使用概念叙事、材质\/光影板、平面\/节点分析、灯光策略图、动线或时间线等高级方案表达。/);
+  assert.match(appSource, /可以少量引用画布生成图作为局部裁切、氛围证据或辅助图，不要机械铺满整页。/);
+  assert.doesNotMatch(appSource, /图面或效果图区域/);
   assert.match(appSource, /sourceDataUrl\?: string/);
   assert.match(appSource, /sourceText\?: string/);
   assert.match(appSource, /readProjectMaterialSource\(file\)/);
@@ -95,7 +105,8 @@ test("document output proxy returns page image metadata instead of plain text on
 });
 
 test("document output proxy times out stalled image2 requests", () => {
-  assert.match(viteSource, /const openAiDefaultDocumentOutputTimeoutMs = 180_000;/);
+  assert.match(viteSource, /const openAiDefaultDocumentOutputTimeoutMs = 600_000;/);
+  assert.match(apiServerSource, /const openAiDefaultDocumentOutputTimeoutMs = 600_000;/);
   assert.match(viteSource, /function resolveDocumentOutputTimeoutMs/);
   assert.match(viteSource, /OPENAI_DOCUMENT_OUTPUT_TIMEOUT_MS/);
   assert.match(agentProxyBlock, /const upstreamController = isDocumentOutputTask\s*\?\s*new AbortController\(\)/);

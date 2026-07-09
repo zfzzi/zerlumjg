@@ -50,7 +50,7 @@ test("image upscale can resolve the RunningHub AI App run path", () => {
   assert.match(configSource, /RUNNINGHUB_UPSCALE_APP_PATH/);
   assert.match(configSource, /run\\\/ai-app/);
   assert.match(configSource, /ai-detail/);
-  assert.match(localEnv, /^RUNNINGHUB_UPSCALE_APP_PATH=\/run\/ai-app\/2063809922772594690$/m);
+  assert.match(localEnv, /^RUNNINGHUB_UPSCALE_APP_PATH=\/run\/ai-app\/2074155000317702146$/m);
 });
 
 test("local image generation credentials are configured", () => {
@@ -60,7 +60,7 @@ test("local image generation credentials are configured", () => {
     /^RUNNINGHUB_IMAGE_ENDPOINT=https:\/\/www\.runninghub\.ai\/openapi\/v2\/rhart-imagine-image-quality\/edit$/m,
   );
   assert.match(localEnv, /^RUNNINGHUB_UPSCALE_API_KEY=.+$/m);
-  assert.match(localEnv, /^RUNNINGHUB_UPSCALE_WEBAPP_ID=2063809922772594690$/m);
+  assert.match(localEnv, /^RUNNINGHUB_UPSCALE_WEBAPP_ID=2074155000317702146$/m);
 });
 
 test("image generation can use the qweapi OpenAI-compatible image channel", () => {
@@ -141,7 +141,7 @@ test("image generation upscales the generated base image to the selected 2K-8K r
 
 test("image upscale sends RunningHub resolution value ids", () => {
   [configSource, apiSource].forEach((source) => {
-    assert.match(source, /const runningHubUpscaleResolutionValues = \{[\s\S]*"2k": "0\.2",[\s\S]*"4k": "0\.4",[\s\S]*"6k": "0\.6",[\s\S]*"8k": "0\.8",[\s\S]*\} as const;/);
+    assert.match(source, /const runningHubUpscaleResolutionValues = \{[\s\S]*"2k": "2",[\s\S]*"4k": "3",[\s\S]*"6k": "4",[\s\S]*"8k": "5",[\s\S]*\} as const;/);
     assert.match(source, /function normalizeUpscaleResolutionValue\(value: string\)/);
     assert.match(source, /return runningHubUpscaleResolutionValues\[normalizedResolution\];/);
     assert.match(source, /const resolutionValue = normalizeUpscaleResolutionValue\(targetResolution\);/);
@@ -161,6 +161,16 @@ test("image generation forwards all canvas reference images to RunningHub", () =
   assert.match(apiSource, /referenceImageUrls,/);
   assert.match(configSource, /imageUrls: uploadedImageUrls,/);
   assert.match(apiSource, /imageUrls: uploadedImageUrls,/);
+});
+
+test("canvas image generation inlines same-origin image URLs before qweapi submission", () => {
+  assert.match(appSource, /function shouldInlineImageUrlForAgentApi/);
+  assert.match(appSource, /url\.origin === window\.location\.origin/);
+  assert.match(appSource, /async function imageUrlToDataUrl/);
+  assert.match(
+    appSource,
+    /imageUrl\.startsWith\("blob:"\) \|\| shouldInlineImageUrlForAgentApi\(imageUrl\)/,
+  );
 });
 
 test("image generation proxy preserves canvas image role metadata", () => {

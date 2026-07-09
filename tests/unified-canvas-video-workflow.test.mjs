@@ -26,6 +26,15 @@ const canvasNodeCardSource = appSource.slice(
   appSource.indexOf("function CanvasNodeCard"),
   appSource.indexOf("function VideoView"),
 );
+const unifiedCanvasTagStart = appSource.indexOf("<UnifiedCanvasView");
+const unifiedCanvasTag = appSource.slice(
+  unifiedCanvasTagStart,
+  appSource.indexOf("/>", unifiedCanvasTagStart) + 2,
+);
+const unifiedCanvasFunction = appSource.slice(
+  appSource.indexOf("function UnifiedCanvasView"),
+  appSource.indexOf("function CanvasNodeCard"),
+);
 
 test("workspace navigation uses one unified AI canvas entry for image and video creation", () => {
   assert.match(appSource, /\{ id: "canvas", label: "AI无限画布", icon: ImageIcon \}/);
@@ -73,11 +82,20 @@ test("unified canvas connection rules infer edge roles and block video to image"
   assert.doesNotMatch(appSource, /aria-label="选择连线角色"/);
 });
 
-test("canvas image references only connect outward from uploaded main images", () => {
+test("canvas image references connect outward from image nodes with media output", () => {
   assert.match(appSource, /function isUploadedCanvasImageNode/);
   assert.match(appSource, /const version = getSelectedCanvasVersion\(node\);/);
   assert.match(appSource, /version\?\.prompt === "本地上传"/);
+  assert.match(appSource, /function hasCanvasImageOutput\(node: CanvasNode\)/);
   assert.match(
+    appSource,
+    /return node\.kind === "image" && Boolean\(getCanvasNodeMediaUrl\(node\)\);/,
+  );
+  assert.match(
+    appSource,
+    /source\.kind === "image" && target\.kind === "image"[\s\S]*return hasCanvasImageOutput\(source\) && !isUploadedCanvasImageNode\(target\);/,
+  );
+  assert.doesNotMatch(
     appSource,
     /source\.kind === "image" && target\.kind === "image"[\s\S]*return isUploadedCanvasImageNode\(source\) && !isUploadedCanvasImageNode\(target\);/,
   );
@@ -387,8 +405,8 @@ test("image prompt highlights selected @ mentions inline", () => {
 test("image nodes generate prompts from canvas images without reading zerlum agent output", () => {
   assert.match(appSource, /async function generateCanvasNodePrompt/);
   assert.doesNotMatch(appSource, /function extractLatestAgentImagePrompt/);
-  assert.doesNotMatch(appSource, /<UnifiedCanvasView[\s\S]*agentMessages=\{agentMessages\}/);
-  assert.doesNotMatch(appSource, /function UnifiedCanvasView\(\{[\s\S]*agentMessages,/);
+  assert.doesNotMatch(unifiedCanvasTag, /agentMessages=\{agentMessages\}/);
+  assert.doesNotMatch(unifiedCanvasFunction, /agentMessages/);
   assert.doesNotMatch(manualPromptFunction, /agentPrompt|agentMessages/);
   assert.match(appSource, /async function collectCanvasPromptImages/);
   assert.match(appSource, /getIncomingCanvasReferences\(node\.id\)/);

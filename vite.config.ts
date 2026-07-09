@@ -15,7 +15,7 @@ const arkDefaultVideoPollIntervalMs = 5_000;
 const openAiDefaultAgentModel = "gpt-4o-mini";
 const openAiDefaultDocumentOutputModel = "gpt-image-2";
 const openAiDefaultImageModel = "gpt-image-2";
-const openAiDefaultDocumentOutputTimeoutMs = 180_000;
+const openAiDefaultDocumentOutputTimeoutMs = 600_000;
 const runningHubBaseUrl = "https://www.runninghub.ai";
 const runningHubDefaultImageEndpoint =
   `${runningHubBaseUrl}/openapi/v2/rhart-imagine-image-quality/edit`;
@@ -30,15 +30,15 @@ const runningHubAppOutputsEndpoint =
   `${runningHubBaseUrl}/task/openapi/outputs`;
 const runningHubAppStatusEndpoint = `${runningHubBaseUrl}/task/openapi/status`;
 const runningHubAppDemoEndpoint = `${runningHubBaseUrl}/api/webapp/apiCallDemo`;
-const runningHubDefaultUpscaleWebappId = "2063809922772594690";
+const runningHubDefaultUpscaleWebappId = "2074155000317702146";
 const runningHubDefaultUpscaleAppPath = `/run/ai-app/${runningHubDefaultUpscaleWebappId}`;
 const runningHubDefaultResolution = "1k";
 const runningHubDefaultUpscaleResolution = "4k";
 const runningHubUpscaleResolutionValues = {
-  "2k": "0.2",
-  "4k": "0.4",
-  "6k": "0.6",
-  "8k": "0.8",
+  "2k": "2",
+  "4k": "3",
+  "6k": "4",
+  "8k": "5",
 } as const;
 const runningHubDefaultAspectRatio = "1:1";
 function resolveOpenAiChatEndpoint(env: Record<string, string>, baseUrlKey = "OPENAI_BASE_URL") {
@@ -350,8 +350,9 @@ function buildZerlumSystemPrompt({
   return [
     "你是 Zerlum 照明设计工具平台中的专业助手。",
     "平台当前只保留 AI 无限画布和文本制作两个工具面，分别用于生成夜景效果图、生成视频和生成方案。",
-    "回答时只依据用户输入、上传资料、当前项目基础信息和画布中显式传入的图片或视频参考。",
-    "不要调用、引用或声称使用本地 agent 指令、数据库、知识库、历史 Markdown 索引或联网检索结果。",
+    view === "agent"
+      ? "回答时可结合用户输入、上传资料和当前项目基础信息；不要暴露本机完整路径或内部文件结构。"
+      : "回答时只依据用户输入、上传资料和画布中显式传入的图片或视频参考。",
     view === "canvas"
       ? "在画布场景中，聚焦照明设计视觉生成、提示词优化、画面分析和修改建议；保留用户参考图的结构、构图、主体位置、镜头视角和透视关系，并先判断室内、室外建筑、景观、文旅夜游、视频镜头或不确定类型。"
       : "",
@@ -965,6 +966,29 @@ function buildDocumentMaterialContent(
 
     return content;
   });
+}
+
+function buildOutlineMaterialContext(
+  materials: ReturnType<typeof normalizeProjectMaterialInputs>,
+) {
+  if (!materials.length) {
+    return "";
+  }
+
+  return [
+    "\n用户提交资料：",
+    materials
+      .map((material, index) => {
+        const sourceText = material.sourceText
+          ? `\n源文本摘录：${material.sourceText.slice(0, 12_000)}`
+          : material.sourceDataUrl
+            ? "\n已收到源文件或图片附件，请结合显式传入内容判断。"
+            : "\n暂无可直接读取的源文本。";
+
+        return `${index + 1}. ${material.name}${sourceText}`;
+      })
+      .join("\n\n"),
+  ].join("\n");
 }
 
 function normalizeAgentAudio(value: unknown) {
@@ -1973,7 +1997,7 @@ export default defineConfig(({ mode }) => {
                 return;
               }
 
-              const project = body.project
+              const project = body.project && !isOutlineTask && !isDocumentOutputTask
                 ? isDocumentOutputTask
                   ? `\n\n当前项目：${body.project.name || "未命名项目"}。`
                   : `\n\n当前项目：${body.project.name || "未命名项目"}；类型：${
@@ -1993,6 +2017,8 @@ export default defineConfig(({ mode }) => {
                             .join("、")}。`
                         : ""
                     }`
+                  : isOutlineTask
+                    ? buildOutlineMaterialContext(projectMaterials)
                   : `\n已上传资料：${projectMaterials
                       .map((item) => item.name)
                       .filter(Boolean)
@@ -2029,16 +2055,25 @@ export default defineConfig(({ mode }) => {
                 ? [
                     "【Zerlum Outline 输出约束】",
                     "说明身份时，只说“我是 Zerlum照明系统”。",
-                    "你的信息只来自用户上传资料和当前项目基础信息。",
-                    "不得调用、引用或声称使用任何 agent.md、Zerlum 知识库、数据库或联网检索结果。",
-                    "收到资料时，输出简洁大纲；没有资料时，只说明目前没有收到资料。",
+                    "你的信息只来自用户提交资料、Zerlum Agent 聊天输出和画布生成图片。",
+                    "必须遵循已挂载的 Lighting Skill 9 个 md 作为照明设计专业约束。",
+                    "不得调用、引用或声称使用任何 agent.md、数据库或联网检索结果。",
+                    "Lighting Skill 不能当作项目事实来源。",
+                    "不得读取或引用平台页面信息、项目卡片字段、导航状态或任何未显式传入的页面内容。",
+                    "收到任一来源时，输出简洁大纲；没有资料、Agent 输出或画布图片时，只说明目前没有收到可用于生成大纲的资料。",
                     "版式默认 16:9 横屏。",
                     "大纲开头必须先写清楚排版风格和字体要求。",
+                    "先判断项目类型、空间气质、目标受众和显式资料里可推导的表达风格。",
+                    "给出 2-3 条视觉路线，并选择最适合本项目的一条作为整套方案基调。",
+                    "不要让整套方案全篇都放画布生成效果图。",
+                    "效果图页只用于封面、重点空间、关键体验或前后对比等必要页面。",
+                    "其余页面应使用概念叙事、材质/光影板、平面/节点分析、灯光策略图、动线或时间线等页面类型。",
+                    "每页必须标注页面类型、主要视觉元素、是否使用画布生成图以及使用方式。",
                     "随后逐页写清楚每页的排版内容、版面位置和图文层级。",
                     "不要输出正文、示例、推理过程、引用清单或额外解释。",
                   ].join("\n")
                 : "";
-              const enrichedMessage = withZerlumSkillContext([
+              const baseMessage = [
                 systemPrompt,
                 "",
                 canvasVisualInstruction,
@@ -2052,17 +2087,20 @@ export default defineConfig(({ mode }) => {
                 audioContext,
                 "",
                 isOutlineTask
-                  ? "请以 Zerlum照明系统身份回答，只依据用户上传资料和当前项目基础信息生成大纲。"
+                  ? "请以 Zerlum照明系统身份回答，只依据用户提交资料、Zerlum Agent 聊天输出和画布生成图片生成大纲，同时遵循已挂载 Lighting Skill 9 个 md 的照明设计方法。"
                   : view === "canvas"
                   ? "请按 AI 无限画布照明设计框架回答：根据用户意图输出提示词、画面分析、修改建议或照明设计说明，并让后端分层灯光设计框架的场景判断、设计工具箱和差异化变量参与判断。"
                   : hasAgentImages
-                    ? "请以 Zerlum 视觉助手身份先观察附带图片，再基于用户输入、上传资料和当前项目基础信息给出画面理解、提示词建议、问题判断和可执行修改建议；提示词建议必须要求与原图结构、构图、主体位置、镜头视角和透视关系保持一致。"
+                    ? "请以 Zerlum 视觉助手身份先观察附带图片，再基于用户输入、上传资料和显式传入的图片给出画面理解、提示词建议、问题判断和可执行修改建议；提示词建议必须要求与原图结构、构图、主体位置、镜头视角和透视关系保持一致。"
                     : hasAgentAudio
-                      ? "请以 Zerlum 照明设计助手身份先识别附带语音，再基于用户输入、上传资料和当前项目基础信息回答语音里的请求。"
-                  : "请以 Zerlum 照明设计助手身份回答，并基于用户输入、上传资料和当前项目基础信息说明依据、假设和需要复核的地方。",
+                      ? "请以 Zerlum 照明设计助手身份先识别附带语音，再基于用户输入、上传资料和显式传入的语音内容回答语音里的请求。"
+                  : "请以 Zerlum 照明设计助手身份回答，并基于用户输入和上传资料说明依据、假设和需要复核的地方。",
               ]
                 .filter(Boolean)
-                .join("\n"));
+                .join("\n");
+              const enrichedMessage = isOutlineTask
+                ? withZerlumSkillContext(baseMessage, { forGeneration: false })
+                : withZerlumSkillContext(baseMessage);
               const agentModel = isDocumentOutputTask
                 ? env.OPENAI_DOCUMENT_OUTPUT_MODEL ||
                   process.env.OPENAI_DOCUMENT_OUTPUT_MODEL ||
@@ -2353,7 +2391,7 @@ export default defineConfig(({ mode }) => {
                 env.OPENAI_AGENT_MODEL ||
                 process.env.OPENAI_AGENT_MODEL ||
                 openAiDefaultAgentModel;
-              const promptEndpoint = resolveOpenAiResponsesEndpoint(env, "OPENAI_PROMPT_BASE_URL");
+              const promptEndpoint = resolveOpenAiChatEndpoint(env, "OPENAI_PROMPT_BASE_URL");
               const imageList = images
                 .map((image, index) => `${index + 1}. ${image.label || `参考图 ${index + 1}`}`)
                 .join("\n");
@@ -2377,16 +2415,18 @@ export default defineConfig(({ mode }) => {
               const requestPayload = {
                 model: promptModel,
                 stream: false,
-                input: [
+                messages: [
                   {
                     role: "user",
                     content: [
                       ...images.map((image) => ({
-                        type: "input_image",
-                        image_url: image.imageUrl,
+                        type: "image_url",
+                        image_url: {
+                          url: image.imageUrl,
+                        },
                       })),
                       {
-                        type: "input_text",
+                        type: "text",
                         text: promptInstruction,
                       },
                     ],
@@ -2413,7 +2453,7 @@ export default defineConfig(({ mode }) => {
                 return;
               }
 
-              const prompt = extractDocumentOutputText(JSON.parse(upstreamText));
+              const prompt = extractOpenAiChatCompletionText(JSON.parse(upstreamText));
 
               sendJson(response, 200, { prompt: cleanCanvasPromptOutput(prompt) });
             } catch (error) {

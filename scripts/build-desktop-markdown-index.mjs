@@ -13,7 +13,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(__dirname, "..");
 const configuredSourceRoot =
-  process.env.ZERLUM_DESKTOP_LIBRARY ?? "C:\\Users\\43490\\Desktop\\新建文件夹";
+  process.env.ZERLUM_DESKTOP_LIBRARY ??
+  "C:\\Users\\Administrator\\Desktop\\照明知识库核心包";
 const sourceRoot = resolveSourceRoot(configuredSourceRoot);
 const outputRoot = join(repoRoot, "knowledge", "desktop-lighting-library");
 
@@ -323,7 +324,7 @@ export function buildIndex(options = {}) {
   const documents = [];
   const chunks = [];
   const collectionCounts = {};
-  const excludedSupersededStandards = [];
+  const supersededNationalStandards = [];
 
   for (const filePath of files) {
     const rel = normalizePath(relative(effectiveSourceRoot, filePath));
@@ -333,13 +334,12 @@ export function buildIndex(options = {}) {
     const content = readFileSync(filePath, "utf8");
     const supersededStandard = findSupersededNationalStandard(rel, content);
     if (supersededStandard) {
-      excludedSupersededStandards.push({
+      supersededNationalStandards.push({
         relativePath: rel,
         sourcePath: filePath,
         supersededBy: supersededStandard.currentCode,
         title: supersededStandard.title,
       });
-      continue;
     }
 
     const title = extractTitle(content, rel.split("/").at(-1) ?? rel);
@@ -347,12 +347,14 @@ export function buildIndex(options = {}) {
     const headings = extractHeadings(content);
     const rule = getRule(rel);
     const sourceHash = sha256(content);
-    const needsAudit = Boolean(rule.needsAudit);
-    const standardStatus = needsAudit
+    const needsAudit = Boolean(rule.needsAudit || supersededStandard);
+    const standardStatus = supersededStandard
       ? "requires-current-version-check"
-      : rule.collection.includes("standards")
-        ? "needs-review"
-        : "not-a-standard-source";
+      : needsAudit
+        ? "requires-current-version-check"
+        : rule.collection.includes("standards")
+          ? "needs-review"
+          : "not-a-standard-source";
     const keywords = deriveKeywords(rel, title, metadata, headings);
     const docId = `desktop-md-${sha256(rel).slice(0, 12)}`;
     const docChunks = splitIntoChunks(content);
@@ -384,6 +386,8 @@ export function buildIndex(options = {}) {
       keywords,
       needsAudit,
       standardStatus,
+      supersededBy: supersededStandard?.currentCode ?? null,
+      supersededTitle: supersededStandard?.title ?? null,
       chunkCount: docChunks.length,
     });
 
@@ -404,6 +408,8 @@ export function buildIndex(options = {}) {
         trust: rule.trust,
         needsAudit,
         standardStatus,
+        supersededBy: supersededStandard?.currentCode ?? null,
+        supersededTitle: supersededStandard?.title ?? null,
         text: chunk.text,
         searchText: cleanSearchText(`${title}\n${chunk.heading}\n${chunk.text}`),
       });
@@ -417,7 +423,8 @@ export function buildIndex(options = {}) {
     documentCount: documents.length,
     chunkCount: chunks.length,
     collectionCounts,
-    excludedSupersededStandards,
+    supersededNationalStandards,
+    excludedSupersededStandards: [],
     warning:
       "This index references local private source files. Standards-audit entries are not current compliance sources until verified.",
     documents,
@@ -438,6 +445,7 @@ function writeIndex(index, targetRoot = outputRoot) {
         documentCount: index.documentCount,
         chunkCount: index.chunkCount,
         collectionCounts: index.collectionCounts,
+        supersededNationalStandards: index.supersededNationalStandards,
         excludedSupersededStandards: index.excludedSupersededStandards,
         warning: index.warning,
         documents: index.documents,
@@ -454,7 +462,7 @@ function writeIndex(index, targetRoot = outputRoot) {
     "utf8",
   );
 
-  const excludedRows = index.excludedSupersededStandards.map(
+  const supersededRows = index.supersededNationalStandards.map(
     (item) => `| \`${item.relativePath}\` | \`${item.supersededBy}\` | ${item.title} |`,
   );
 
@@ -468,7 +476,7 @@ function writeIndex(index, targetRoot = outputRoot) {
       "",
       `- 文档数：${index.documentCount}`,
       `- 检索切片数：${index.chunkCount}`,
-      `- 已过滤旧版/重复国标：${index.excludedSupersededStandards.length}`,
+      `- 需按现行标准复核的旧版引用文件：${index.supersededNationalStandards.length}`,
       "",
       "## 集合统计",
       "",
@@ -477,14 +485,14 @@ function writeIndex(index, targetRoot = outputRoot) {
       ...Object.entries(index.collectionCounts)
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([collection, count]) => `| ${collection} | ${count} |`),
-      ...(excludedRows.length
+      ...(supersededRows.length
         ? [
             "",
-            "## 已过滤旧版/重复国标",
+            "## 需按现行标准复核的旧版引用",
             "",
             "| 原文件 | 现行标准 | 名称 |",
             "| --- | --- | --- |",
-            ...excludedRows,
+            ...supersededRows,
           ]
         : []),
       "",
@@ -506,6 +514,6 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     `Indexed ${index.documentCount} markdown files into ${index.chunkCount} chunks.`,
   );
   console.log(
-    `Skipped ${index.excludedSupersededStandards.length} superseded national standard files.`,
+    `Flagged ${index.supersededNationalStandards.length} files for current-standard review.`,
   );
 }

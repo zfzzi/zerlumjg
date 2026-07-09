@@ -29,9 +29,15 @@ const expectedSkillFiles = [
   "references/06-output-quality-rubric.md",
   "references/07-variation-variables.md",
 ];
+const obsoleteSkillFiles = [
+  "references/architecture.md",
+  "references/interior.md",
+  "references/landscape.md",
+  "references/toolbox.md",
+];
 const vercelConfigPath = join(root, "vercel.json");
 
-test("backend replaces the old monolithic skill markdown with layered lighting design files", () => {
+test("backend uses the previous nine-file lighting design skill package", () => {
   assert.equal(existsSync(oldSkillMarkdownPath), false);
   assert.equal(existsSync(skillRootPath), true);
 
@@ -43,17 +49,48 @@ test("backend replaces the old monolithic skill markdown with layered lighting d
     );
   }
 
+  for (const relativePath of obsoleteSkillFiles) {
+    assert.equal(
+      existsSync(join(skillRootPath, relativePath)),
+      false,
+      `${relativePath} should be removed after restoring the previous nine-file skill`,
+    );
+  }
+
   const skillIndex = readFileSync(join(skillRootPath, "SKILL.md"), "utf8");
-  assert.match(skillIndex, /Universal Design Thinking|通用设计思维/);
-  assert.match(skillIndex, /Typology Playbook|项目类型微调策略/);
-  assert.match(skillIndex, /用户意图、参考图和项目资料优先/);
+  assert.match(skillIndex, /Zerlum Lighting Design Skill/);
+  assert.match(skillIndex, /Four Layers/);
+  assert.match(skillIndex, /references\/00-universal-design-thinking\.md/);
+  assert.match(skillIndex, /references\/02-domain-interior-lighting\.md/);
+  assert.match(skillIndex, /references\/07-variation-variables\.md/);
+
+  const universalFile = readFileSync(
+    join(skillRootPath, "references", "00-universal-design-thinking.md"),
+    "utf8",
+  );
+  assert.match(universalFile, /Universal Design Thinking/);
+  assert.match(universalFile, /Three Lighting Layers/);
 
   const variationFile = readFileSync(
     join(skillRootPath, "references", "07-variation-variables.md"),
     "utf8",
   );
-  assert.match(variationFile, /差异化变量池/);
-  assert.match(variationFile, /不要把变量写成固定风格模板/);
+  assert.match(variationFile, /Variation Variables/);
+  assert.match(variationFile, /Differentiation Variable Pool/);
+});
+
+test("lighting skill markdown uses the previous English-led reference package", () => {
+  for (const relativePath of expectedSkillFiles) {
+    const markdown = readFileSync(join(skillRootPath, relativePath), "utf8");
+
+    assert.match(markdown, /Zerlum|Lighting|Purpose|Output|Design|Prompt|Use|Avoid/);
+  }
+
+  const skillIndex = readFileSync(join(skillRootPath, "SKILL.md"), "utf8");
+
+  assert.match(skillIndex, /Core Rule/);
+  assert.match(skillIndex, /Selection Discipline/);
+  assert.match(skillIndex, /Output Discipline/);
 });
 
 test("backend exposes a shared skill context helper", () => {
@@ -63,7 +100,16 @@ test("backend exposes a shared skill context helper", () => {
   const skillHelperSource = readFileSync(skillHelperPath, "utf8");
   const skillHelperTypes = readFileSync(skillHelperTypesPath, "utf8");
   assert.match(skillHelperSource, /zerlum-lighting-skill\/SKILL\.md/);
-  assert.match(skillHelperSource, /07-variation-variables\.md/);
+  assert.match(skillHelperSource, /references\/00-universal-design-thinking\.md/);
+  assert.match(skillHelperSource, /references\/01-domain-facade-lighting\.md/);
+  assert.match(skillHelperSource, /references\/02-domain-interior-lighting\.md/);
+  assert.match(skillHelperSource, /references\/03-domain-landscape-lighting\.md/);
+  assert.match(skillHelperSource, /references\/04-domain-cultural-tourism-night-tour\.md/);
+  assert.match(skillHelperSource, /references\/05-typology-hotel-lobby\.md/);
+  assert.match(skillHelperSource, /references\/06-output-quality-rubric\.md/);
+  assert.match(skillHelperSource, /references\/07-variation-variables\.md/);
+  assert.doesNotMatch(skillHelperSource, /references\/architecture\.md/);
+  assert.doesNotMatch(skillHelperSource, /references\/toolbox\.md/);
   assert.doesNotMatch(skillHelperSource, /zerlum-facade-lighting-skill\.md/);
   assert.match(skillHelperSource, /function buildZerlumSkillContext/);
   assert.match(skillHelperSource, /function withZerlumSkillContext/);
@@ -81,8 +127,9 @@ test("skill context sent to model calls stays within a safe request size", async
   const generationPrompt = withZerlumSkillGenerationPrompt("生成夜景效果图。");
 
   assert.match(ordinaryPrompt, /Zerlum 后端统一灯光设计 Skill/);
-  assert.match(ordinaryPrompt, /通用设计思维/);
-  assert.match(ordinaryPrompt, /差异化变量/);
+  assert.match(ordinaryPrompt, /Zerlum Lighting Design Skill/);
+  assert.match(ordinaryPrompt, /Universal Design Thinking/);
+  assert.match(ordinaryPrompt, /Differentiation Variable Pool/);
   assert.ok(Buffer.byteLength(ordinaryPrompt, "utf8") < 60_000);
   assert.ok(Buffer.byteLength(generationPrompt, "utf8") < 60_000);
 });
@@ -100,16 +147,19 @@ test("generation model skill context stays compact for image and video providers
   assert.match(generationPrompt, /用户原始生成提示词/);
   assert.doesNotMatch(generationPrompt, /---\s*\nname: zerlum-lighting-design/);
   assert.doesNotMatch(generationPrompt, /references\/00-universal-design-thinking\.md/);
+  assert.doesNotMatch(generationPrompt, /references\/architecture\.md/);
 });
 
 test("deployment config includes the skill markdown in API function bundles", () => {
   assert.equal(existsSync(vercelConfigPath), true);
 
   const vercelConfig = JSON.parse(readFileSync(vercelConfigPath, "utf8"));
-  assert.equal(
-    vercelConfig.functions?.["api/*.ts"]?.includeFiles,
-    "api/zerlum-lighting-skill/**",
-  );
+  const includeFiles = vercelConfig.functions?.["api/*.ts"]?.includeFiles;
+
+  assert.equal(typeof includeFiles, "string");
+  assert.match(includeFiles, /api\/zerlum-lighting-skill\/\*\*/);
+  assert.doesNotMatch(includeFiles, /api\/zerlum-agent-context\/\*\*/);
+  assert.doesNotMatch(includeFiles, /knowledge\/desktop-lighting-library/);
 });
 
 test("local and production backend routes attach skill to chat and video prompts but not image generation prompts", () => {
@@ -139,6 +189,12 @@ test("local and production backend routes attach skill to chat and video prompts
     assert.doesNotMatch(imageRouteSource, /prompt:\s*skillPrompt,/);
   }
 
-  assert.match(viteSource, /enrichedMessage = withZerlumSkillContext/);
-  assert.match(apiServerSource, /return withZerlumSkillContext\(basePrompt\);/);
+  assert.match(
+    viteSource,
+    /const enrichedMessage = isOutlineTask\s*\?\s*withZerlumSkillContext\(baseMessage,\s*\{\s*forGeneration:\s*false\s*\}\)\s*:\s*withZerlumSkillContext\(baseMessage\);/,
+  );
+  assert.match(
+    apiServerSource,
+    /return isOutlineTask\s*\?\s*withZerlumSkillContext\(basePrompt,\s*\{\s*forGeneration:\s*false\s*\}\)\s*:\s*withZerlumSkillContext\(basePrompt\);/,
+  );
 });
