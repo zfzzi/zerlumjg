@@ -13,3 +13,4 @@ verification-*.png
 !.env.example
 
 .vercel
+.worktrees/
