@@ -90,7 +90,7 @@ test("unified canvas derives reusable images from image node versions", () => {
 test("unified canvas stays mounted and replaces the standalone video view", () => {
   assert.match(
     appSource,
-    /<div[\s\S]*aria-hidden=\{activeView !== "canvas"\}[\s\S]*className=\{`workspace-preserved-view \$\{[\s\S]*activeView === "canvas" \? "active" : "is-hidden"[\s\S]*\}`\}[\s\S]*<UnifiedCanvasView[\s\S]*permissions=\{permissions\}/,
+    /<div[\s\S]*aria-hidden=\{activeView !== "canvas"\}[\s\S]*className=\{`workspace-preserved-view \$\{[\s\S]*activeView === "canvas" \? "active" : "is-hidden"[\s\S]*\}`\}[\s\S]*<UnifiedCanvasView[\s\S]*onGeneratedImagesChange=\{setCanvasGeneratedImages\}/,
   );
   assert.doesNotMatch(appSource, /aria-hidden=\{activeView !== "video"\}/);
   assert.doesNotMatch(appSource, /<VideoView[\s\S]*canvasGeneratedImages=\{canvasGeneratedImages\}/);

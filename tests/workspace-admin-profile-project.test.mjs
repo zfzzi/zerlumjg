@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const appSource = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+const headerSource = readFileSync(
+  new URL("../src/shell/WorkspaceHeader.tsx", import.meta.url),
+  "utf8",
+);
 const stateSource = readFileSync(
   new URL("../src/state/workspace.ts", import.meta.url),
   "utf8",
@@ -23,7 +27,7 @@ test("user detail dialog edits display name and avatar", () => {
   assert.match(appSource, /编辑名称/);
   assert.match(appSource, /className="profile-avatar-edit"/);
   assert.match(appSource, /aria-label="更换头像"/);
-  assert.match(appSource, /className="profile-button-avatar"/);
+  assert.match(headerSource, /className="profile-button-avatar"/);
   assert.match(appSource, /保存用户信息/);
   assert.match(appSource, /displayName: nextName/);
   assert.doesNotMatch(appSource, /项目码|Token 使用量/);

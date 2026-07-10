@@ -6,8 +6,8 @@ import test from "node:test";
 const root = process.cwd();
 const viteSource = readFileSync(join(root, "vite.config.ts"), "utf8");
 const apiServerSource = readFileSync(join(root, "api", "_zerlum-server.ts"), "utf8");
-const skillHelperSource = readFileSync(join(root, "api", "zerlum-skill.js"), "utf8");
-const skillHelperTypes = readFileSync(join(root, "api", "zerlum-skill.d.ts"), "utf8");
+const skillHelperSource = readFileSync(join(root, "api", "zerlum-landscape-skill.js"), "utf8");
+const skillHelperTypes = readFileSync(join(root, "api", "zerlum-landscape-skill.d.ts"), "utf8");
 const vercelConfig = JSON.parse(readFileSync(join(root, "vercel.json"), "utf8"));
 const agentContextRoot = join(root, "api", "zerlum-agent-context");
 const removedAgentContextFiles = [
@@ -36,9 +36,13 @@ test("agent markdown context files are no longer mounted", () => {
   assert.doesNotMatch(skillHelperSource, /retrieveDesktopKnowledgeChunks/);
 });
 
-test("shared skill helper no longer exposes fixed agent markdown context", () => {
-  assert.doesNotMatch(skillHelperSource, /export function buildZerlumKnowledgeContext/);
-  assert.doesNotMatch(skillHelperTypes, /export function buildZerlumKnowledgeContext/);
+test("shared landscape helper exposes only the versioned landscape context", () => {
+  assert.match(skillHelperSource, /export function buildZerlumLandscapeContext/);
+  assert.match(skillHelperTypes, /export function buildZerlumLandscapeContext/);
+  assert.match(skillHelperSource, /zerlum-landscape-skill\/SKILL\.md/);
+  assert.match(skillHelperSource, /"00-universal-landscape-thinking"/);
+  assert.match(skillHelperSource, /zerlum-landscape-skill\/references\/\$\{name\}\.md/);
+  assert.doesNotMatch(skillHelperSource, /buildZerlumKnowledgeContext/);
   assert.doesNotMatch(skillHelperTypes, /retrieveDesktopKnowledgeChunks/);
 });
 
@@ -59,7 +63,7 @@ test("Vercel function bundle does not include removed agent markdown context", (
   const includeFiles = vercelConfig.functions?.["api/*.ts"]?.includeFiles;
 
   assert.equal(typeof includeFiles, "string");
-  assert.match(includeFiles, /api\/zerlum-lighting-skill\/\*\*/);
+  assert.match(includeFiles, /api\/zerlum-landscape-skill\/\*\*/);
   assert.doesNotMatch(includeFiles, /api\/zerlum-agent-context\/\*\*/);
   assert.doesNotMatch(includeFiles, /knowledge\/desktop-lighting-library/);
 });

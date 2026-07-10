@@ -2065,7 +2065,7 @@ export default defineConfig(({ mode }) => {
                     "版式默认 16:9 横屏。",
                     "大纲开头必须先写清楚排版风格和字体要求。",
                     "先判断景观项目类型、设计阶段、场地问题、目标人群和显式资料里可推导的表达基调。",
-                    "根据资料选择项目理解、场地问题和机会、设计概念、总体空间结构、功能游线、关键节点、植物季相、材料细部、生态水策略、运营分期和待复核项等页面。",
+                    "根据资料选择项目理解、场地问题和机会、设计概念、总体空间结构、功能、游线与使用场景、关键节点、植物与季相策略、材料、铺装和构筑物、生态水策略、运营分期和待复核项等页面。",
                     "不要让整套方案全篇都放画布生成效果图。",
                     "效果图页只用于封面、设计方向、重点节点、关键体验或前后对比等必要页面。",
                     "其余页面应使用场地分析、结构图、游线图、植物板、材料板、节点分析或运营时间线等页面类型。",
@@ -2368,6 +2368,17 @@ export default defineConfig(({ mode }) => {
               const images = normalizeAgentImages(body.images);
               const nodeTitle = String(body.nodeTitle ?? "图像节点").trim();
               const currentPrompt = String(body.currentPrompt ?? "").trim();
+              const generationMode = String(body.generationMode ?? "preserve").trim();
+              const generationModeInstructions: Record<string, string> = {
+                preserve: "保留原图结构、视角、透视、场地尺度和未要求改变的主体，只优化用户明确指定的内容。",
+                concept: "允许在既有场地约束下重组空间和设计语言，但保持可读的场地边界与尺度依据。",
+                "local-edit": "只深化用户指定的局部节点，其他空间、主体和构图保持不变。",
+                variation: "保留场地约束和核心功能，形成一个与当前方案清晰可比较的方向变体。",
+                "season-time": "只改变季节、时间、天气和相应植物状态，不改变空间结构与主体。",
+                free: "允许自由生成，但不得把参考图中的未确认内容冒充项目事实。",
+              };
+              const generationModeInstruction =
+                generationModeInstructions[generationMode] ?? generationModeInstructions.preserve;
               const apiKey =
                 env.OPENAI_PROMPT_API_KEY ||
                 process.env.OPENAI_PROMPT_API_KEY ||
@@ -2394,15 +2405,19 @@ export default defineConfig(({ mode }) => {
                 openAiDefaultAgentModel;
               const promptEndpoint = resolveOpenAiChatEndpoint(env, "OPENAI_PROMPT_BASE_URL");
               const imageList = images
-                .map((image, index) => `${index + 1}. ${image.label || `参考图 ${index + 1}`}`)
+                .map(
+                  (image, index) =>
+                    `${index + 1}. ${image.label || `参考图 ${index + 1}`}（关系：${image.role || "未标注"}）`,
+                )
                 .join("\n");
               const promptInstruction = withZerlumLandscapeContext([
                 `当前节点：${nodeTitle || "图像节点"}。`,
                 currentPrompt ? `用户已有提示词：${currentPrompt}` : "",
-                imageList ? `已附带图片：\n${imageList}` : "",
+                `当前生成模式：${generationMode}。${generationModeInstruction}`,
+                imageList ? `图片关系：\n${imageList}` : "",
                 "请观察所有图片和参考图，为该节点生成一段可直接用于景观效果图生成的中文提示词。",
                 "先判断任务是保结构优化、概念改造、局部替换、方向变体、季节时间变化还是自由生成；不要在输出中写出判断标签。",
-                "用户已有提示词、项目资料和参考图的明确要求优先，不要机械套用固定风格。",
+                "依据优先级：用户明确要求 > 项目资料 > 画布显式关系 > 已确认设计结论 > 方法框架。不要机械套用固定风格。",
                 "默认保持原图视角、透视、尺度、地形、建筑、道路和未要求改变的主体；只有用户明确要求时才重组空间。",
                 "重点描述空间层次、功能和游线、植物群落与成熟度、材料尺度与接缝、人尺度、季节天气和使用场景。",
                 "不得无依据增加路径、水景、构筑物、地形或大规模人群；不得默认蓝调夜景或湿润地面。",

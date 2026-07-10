@@ -146,9 +146,9 @@ test("canvas dot array fades out at the furthest zoom level", () => {
   );
 });
 
-test("Zerlum Visual prompt preserves source image structure, perspective, scale, and material", () => {
+test("Zerlum Visual prompt preserves landscape source structure, perspective, and site scale", () => {
   assert.match(
     appSource,
-    /必须保持原图结构、构图、主体位置、镜头视角、透视关系、建筑比例和主要材质不变/,
+    /默认保持原图结构、构图、主体位置、镜头视角、透视关系、场地尺度和未要求改变的主体；概念改造或自由生成除外/,
   );
 });

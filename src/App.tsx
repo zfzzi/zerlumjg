@@ -113,6 +113,8 @@ type AgentChatMessage = {
 
 type AgentStreamStatus = "idle" | "streaming";
 
+type DocumentStage = "sources" | "outline" | "pages" | "review";
+
 type DocumentOutlinePage = {
   id: string;
   pageNumber: number;
@@ -150,11 +152,30 @@ type CanvasNodeKind = "image" | "video";
 
 type CanvasPromptSource = "manual" | "generated";
 
+type LandscapeGenerationMode =
+  | "preserve"
+  | "concept"
+  | "local-edit"
+  | "variation"
+  | "season-time"
+  | "free";
+
 type CanvasEdgeRole =
-  | "main-image"
-  | "reference-image"
+  | "site-base"
+  | "main-scene"
+  | "style-reference"
+  | "material-reference"
+  | "planting-reference"
   | "first-frame"
+  | "last-frame"
   | "reference-video";
+
+type CanvasBranchAction =
+  | "scheme-image"
+  | "reference"
+  | "variation"
+  | "detail"
+  | "walkthrough";
 
 type CanvasGenerationVersion = {
   id: string;
@@ -175,6 +196,7 @@ type CanvasGenerationVersion = {
 };
 
 type CanvasNodeParams = {
+  generationMode: LandscapeGenerationMode;
   imageResolution?: string;
   imageAspectRatio?: string;
   imageCount?: string;
@@ -565,20 +587,74 @@ const canvasConnectionTargetMargin = 28;
 const canvasConnectionTargetWidth = 82;
 
 const canvasEdgeRoleLabels: Record<CanvasEdgeRole, string> = {
-  "main-image": "主图",
-  "reference-image": "参考图",
-  "first-frame": "首帧",
-  "reference-video": "参考视频",
+  "site-base": "场地底图",
+  "main-scene": "主场景",
+  "style-reference": "风格参考",
+  "material-reference": "材料参考",
+  "planting-reference": "植物参考",
+  "first-frame": "视频首帧",
+  "last-frame": "视频尾帧",
+  "reference-video": "视频参考",
 };
 
-const canvasEdgeRoleOptions = [
-  { value: "main-image", label: canvasEdgeRoleLabels["main-image"] },
-  { value: "reference-image", label: canvasEdgeRoleLabels["reference-image"] },
-  { value: "first-frame", label: canvasEdgeRoleLabels["first-frame"] },
-  { value: "reference-video", label: canvasEdgeRoleLabels["reference-video"] },
+const documentStages: Array<{
+  id: DocumentStage;
+  label: string;
+  description: string;
+}> = [
+  { id: "sources", label: "资料确认", description: "核对项目依据" },
+  { id: "outline", label: "大纲生成", description: "组织页面结构" },
+  { id: "pages", label: "页面生成", description: "逐页形成图文" },
+  { id: "review", label: "校对与导出", description: "复核事实边界" },
 ];
 
+function getDocumentStage(
+  outline: string,
+  outputPages: DocumentOutputPage[],
+): DocumentStage {
+  if (!outline.trim()) {
+    return "sources";
+  }
+
+  if (!outputPages.length) {
+    return "outline";
+  }
+
+  if (
+    outputPages.some(
+      (page) => page.status === "idle" || page.status === "streaming",
+    )
+  ) {
+    return "pages";
+  }
+
+  return "review";
+}
+
+function isCanvasPrimaryImageRole(role: CanvasEdgeRole) {
+  return role === "site-base" || role === "main-scene";
+}
+
+function isCanvasReferenceImageRole(role: CanvasEdgeRole) {
+  return (
+    role === "style-reference" ||
+    role === "material-reference" ||
+    role === "planting-reference"
+  );
+}
+
 const canvasImageResolutionOptions = ["2K", "4K", "6K", "8K"];
+const landscapeGenerationModeOptions: Array<{
+  value: LandscapeGenerationMode;
+  label: string;
+}> = [
+  { value: "preserve", label: "保留结构" },
+  { value: "concept", label: "概念改造" },
+  { value: "local-edit", label: "局部深化" },
+  { value: "variation", label: "方向变体" },
+  { value: "season-time", label: "季节时间" },
+  { value: "free", label: "自由生成" },
+];
 const canvasImageAspectOptions = [
   { value: "adaptive", label: "自适应" },
   { value: "16:9", label: "16:9" },
@@ -651,14 +727,18 @@ function isUploadedCanvasImageNode(node: CanvasNode) {
 function isReferenceCanvasImageNode(node: CanvasNode, edges: CanvasEdge[]) {
   return (
     node.kind === "image" &&
-    edges.some((edge) => edge.from === node.id && edge.role === "reference-image")
+    edges.some(
+      (edge) => edge.from === node.id && isCanvasReferenceImageRole(edge.role),
+    )
   );
 }
 
 function isMainCanvasReferenceImageNode(node: CanvasNode, edges: CanvasEdge[]) {
   return (
     node.kind === "image" &&
-    edges.some((edge) => edge.from === node.id && edge.role === "main-image")
+    edges.some(
+      (edge) => edge.from === node.id && isCanvasPrimaryImageRole(edge.role),
+    )
   );
 }
 
@@ -801,18 +881,18 @@ function getCanvasImageEdgeRole(
   existingEdges: CanvasEdge[],
 ) {
   if (isReferenceCanvasImageNode(source, existingEdges)) {
-    return "reference-image";
+    return "style-reference";
   }
 
   const hasMainImage = existingEdges.some(
-    (edge) => edge.to === target.id && edge.role === "main-image",
+    (edge) => edge.to === target.id && isCanvasPrimaryImageRole(edge.role),
   );
 
   if (hasMainImage) {
-    return "reference-image";
+    return "style-reference";
   }
 
-  return "main-image";
+  return isUploadedCanvasImageNode(source) ? "site-base" : "main-scene";
 }
 
 function createCanvasConnectionPreviewNode(kind: CanvasNodeKind): CanvasNode {
@@ -827,11 +907,13 @@ function createCanvasConnectionPreviewNode(kind: CanvasNodeKind): CanvasNode {
     params:
       kind === "image"
         ? {
+            generationMode: "free",
             imageResolution: "4K",
             imageAspectRatio: "adaptive",
             imageCount: "1",
           }
         : {
+            generationMode: "preserve",
             aspectRatio: "adaptive",
             videoResolution: "1080p",
             duration: "8s",
@@ -849,16 +931,12 @@ function getDefaultCanvasEdgeRole(
   }
 
   if (source.kind === "image" && target.kind === "video") {
-    if (!isUploadedCanvasImageNode(source)) {
-      return "reference-image";
-    }
-
     const hasFirstFrame = existingEdges.some(
       (edge) => edge.to === target.id && edge.role === "first-frame",
     );
 
     if (hasFirstFrame) {
-      return "reference-image";
+      return "style-reference";
     }
 
     return "first-frame";
@@ -868,7 +946,7 @@ function getDefaultCanvasEdgeRole(
     return "reference-video";
   }
 
-  return "reference-image";
+  return "style-reference";
 }
 
 const initialCanvasNodes: CanvasNode[] = [];
@@ -1072,18 +1150,24 @@ function splitDocumentOutlinePages(outline: string) {
   }));
 }
 
-function buildDocumentPageImagePrompt(page: DocumentOutlinePage, totalPages: number) {
+function buildDocumentPageImagePrompt(
+  page: DocumentOutlinePage,
+  totalPages: number,
+  project: Project,
+) {
   return [
     "你是 Zerlum image2 方案图片生成 Agent。",
+    `当前项目：${project.name}。项目类型：${project.type}。设计阶段：${project.designStage}。`,
     `只生成第 ${page.pageNumber}/${totalPages} 页图片方案。`,
     "当前任务是分批单页生成，不要把其他页合并到这一张图里。",
     "输出一张完整单页方案版式图片，画面中要包含本页标题、关键内容、主要视觉元素、文字层级和留白关系。",
     "严格按大纲中的“页面类型”设计本页。",
     "如果本页不是效果图页，不要把画布生成图铺满当作主视觉。",
     "只有大纲明确写成效果图页、重点空间渲染页或前后对比页时，才把效果图作为主视觉。",
-    "非效果图页优先使用概念叙事、材质/光影板、平面/节点分析、灯光策略图、动线或时间线等高级方案表达。",
+    "非效果图页优先使用场地分析、空间结构图、游线图、植物板、材料板、节点分析或运营时间线等专业景观表达。",
     "可以少量引用画布生成图作为局部裁切、氛围证据或辅助图，不要机械铺满整页。",
     "严格遵循本页大纲里的排版风格、字体要求、内容位置和图文层级。",
+    "明确区分项目事实、设计判断与待复核项；无法由资料确认的内容必须标注待复核。",
     "不要输出多页拼图，不要生成无关页面，不要添加虚构项目事实。",
     "",
     "【本页大纲】",
@@ -4107,7 +4191,7 @@ function CanvasView({
 
     const requestMessage = voiceInput
       ? [
-          "请识别这段麦克风语音，并按语音内容生成或调整照明设计视觉提示词、画面分析或修改建议。",
+          "请识别这段麦克风语音，并按语音内容生成或调整景观设计视觉提示词、场地与画面分析或修改建议。",
           instruction ? `用户补充文字：${instruction}` : "",
         ]
           .filter(Boolean)
@@ -4137,7 +4221,7 @@ function CanvasView({
       {
         id: assistantId,
         author: "visual",
-        text: "正在根据参考图和你的要求生成照明设计建议...",
+        text: "正在根据参考图和你的要求生成景观设计建议...",
       },
     ]);
     setVisualInput("");
@@ -4882,6 +4966,32 @@ function UnifiedCanvasView({
   }, [connectionDraft?.pointerId, connectionDraft?.isChoosing, pan.x, pan.y, zoom]);
 
   useEffect(() => {
+    if (!connectionDraft?.isChoosing) {
+      return;
+    }
+
+    const sourceNodeId = connectionDraft.sourceNodeId;
+    const handleConnectionMenuKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      setConnectionDraft(null);
+      setConnectionTargetNodeId(null);
+      window.setTimeout(() => {
+        document
+          .querySelector<HTMLButtonElement>(
+            `[data-canvas-connector-node-id="${sourceNodeId}"]`,
+          )
+          ?.focus();
+      }, 0);
+    };
+
+    window.addEventListener("keydown", handleConnectionMenuKeyDown);
+    return () => window.removeEventListener("keydown", handleConnectionMenuKeyDown);
+  }, [connectionDraft?.isChoosing, connectionDraft?.sourceNodeId]);
+
+  useEffect(() => {
     onGeneratedImagesChange(
       canvasNodes
         .filter((node) => node.kind === "image")
@@ -5247,6 +5357,7 @@ function UnifiedCanvasView({
         y: point.y,
         versions: [],
         params: {
+          generationMode: "free",
           imageResolution: "4K",
           imageAspectRatio: "adaptive",
           imageCount: "1",
@@ -5264,6 +5375,7 @@ function UnifiedCanvasView({
       y: point.y,
       versions: [],
       params: {
+        generationMode: "preserve",
         aspectRatio: "adaptive",
         videoResolution: "1080p",
         duration: "8s",
@@ -5271,6 +5383,41 @@ function UnifiedCanvasView({
       },
       videoPaths: [],
     };
+  }
+
+  function createCanvasStarterUpload(title: string) {
+    const count = canvasNodes.filter((node) => node.kind === "image").length + 1;
+    const baseNode = createCanvasNode("image", { x: 190, y: 150 }, count);
+    const node = {
+      ...baseNode,
+      title,
+      params: {
+        ...baseNode.params,
+        generationMode: "preserve" as LandscapeGenerationMode,
+      },
+    };
+
+    setCanvasNodes((current) => [...current, node]);
+    setActiveCanvasNodeId(node.id);
+    pendingUploadNodeId.current = node.id;
+    pendingCreatedUploadNodeId.current = node.id;
+    window.setTimeout(() => imageUploadInputRef.current?.click(), 0);
+  }
+
+  function createCanvasStarterSchemeNode() {
+    const count = canvasNodes.filter((node) => node.kind === "image").length + 1;
+    const node = createCanvasNode("image", { x: 190, y: 150 }, count);
+
+    setCanvasNodes((current) => [
+      ...current,
+      {
+        ...node,
+        title: `方案图 ${count}`,
+        prompt: "描述方案的空间结构、功能游线、植物层次、材料、季节与使用场景。",
+        params: { ...node.params, generationMode: "concept" },
+      },
+    ]);
+    setActiveCanvasNodeId(node.id);
   }
 
   function handleCanvasDoubleClick(event: ReactMouseEvent<HTMLElement>) {
@@ -5330,7 +5477,8 @@ function UnifiedCanvasView({
   function createCanvasReferenceImageNode(targetNode: CanvasNode) {
     const count = canvasNodes.filter((node) => node.kind === "image").length + 1;
     const referenceCount = canvasEdges.filter(
-      (edge) => edge.to === targetNode.id && edge.role === "reference-image",
+      (edge) =>
+        edge.to === targetNode.id && isCanvasReferenceImageRole(edge.role),
     ).length;
     const referenceSize = canvasNodeSizes.image;
     const targetSize = getCanvasNodeSize(targetNode);
@@ -5350,7 +5498,7 @@ function UnifiedCanvasView({
         id: createId("canvas-edge"),
         from: node.id,
         to: targetNode.id,
-        role: "reference-image",
+        role: "style-reference",
       },
     ]);
     setActiveCanvasNodeId(node.id);
@@ -5410,6 +5558,7 @@ function UnifiedCanvasView({
       url,
       prompt: "本地上传",
       params: {
+        generationMode: "preserve",
         imageResolution: "source",
       },
       status: "done",
@@ -5428,6 +5577,10 @@ function UnifiedCanvasView({
               ...node,
               uploadName: file.name,
               uploadUrl: url,
+              params: {
+                ...node.params,
+                generationMode: "preserve",
+              },
               selectedVersionId: version.id,
               versions: [version, ...node.versions],
             }
@@ -5480,7 +5633,7 @@ function UnifiedCanvasView({
       kind: "video",
       url,
       prompt: "本地上传",
-      params: {},
+      params: { generationMode: "preserve" },
       status: "done",
       progress: 100,
       createdAt: formatUploadTime(),
@@ -5669,8 +5822,8 @@ function UnifiedCanvasView({
       .filter((reference) => reference.url.trim());
 
     return markCanvasImageReferencesMentioned(targetNode?.prompt ?? "", [
-      ...references.filter((reference) => reference.role === "main-image"),
-      ...references.filter((reference) => reference.role !== "main-image"),
+      ...references.filter((reference) => isCanvasPrimaryImageRole(reference.role)),
+      ...references.filter((reference) => !isCanvasPrimaryImageRole(reference.role)),
     ]);
   }
 
@@ -5680,7 +5833,7 @@ function UnifiedCanvasView({
   ) {
     const nextReferences = markCanvasImageReferencesMentioned(prompt, references);
     const referenceImages = nextReferences.filter(
-      (reference) => reference.role !== "main-image",
+      (reference) => !isCanvasPrimaryImageRole(reference.role),
     );
 
     if (!prompt.includes("@")) {
@@ -5700,10 +5853,10 @@ function UnifiedCanvasView({
   ) {
     const nextReferences = markCanvasImageReferencesMentioned(prompt, references);
     const mainImages = nextReferences.filter(
-      (reference) => reference.role === "main-image",
+      (reference) => isCanvasPrimaryImageRole(reference.role),
     );
     const referenceImages = nextReferences.filter(
-      (reference) => reference.role !== "main-image",
+      (reference) => !isCanvasPrimaryImageRole(reference.role),
     );
     const selectedReferences = referenceImages.filter(
       (reference) => reference.mentioned,
@@ -5817,8 +5970,10 @@ function UnifiedCanvasView({
       },
       body: JSON.stringify({
         nodeTitle: node.title,
+        generationMode: node.params.generationMode,
         currentPrompt: fallbackPrompt,
         images,
+        relationships: images.map(({ label, role }) => ({ label, role })),
       }),
     });
     const responseText = await response.text();
@@ -5903,6 +6058,34 @@ function UnifiedCanvasView({
     event.stopPropagation();
   }
 
+  function openCanvasConnectionMenuFromKeyboard(
+    node: CanvasNode,
+    connector: HTMLButtonElement,
+  ) {
+    const connectorRect = connector.getBoundingClientRect();
+    const clientX = connectorRect.left + connectorRect.width / 2;
+    const clientY = connectorRect.top + connectorRect.height / 2;
+    const connectorCenter = getCanvasPoint(clientX, clientY);
+    const menuClientX = connectorRect.right + 12;
+    const menuPoint = getCanvasConnectionMenuPoint(menuClientX, clientY);
+    const worldPoint = getCanvasPoint(menuClientX, clientY);
+
+    setActiveCanvasNodeId(node.id);
+    setConnectionStartNodeId(null);
+    setConnectionTargetNodeId(null);
+    setConnectionDraft({
+      sourceNodeId: node.id,
+      pointerId: -1,
+      startX: connectorCenter.x,
+      startY: connectorCenter.y,
+      worldX: worldPoint.x,
+      worldY: worldPoint.y,
+      menuX: menuPoint.menuX,
+      menuY: menuPoint.menuY,
+      isChoosing: true,
+    });
+  }
+
   function updateCanvasConnectionDrag(event: ReactPointerEvent<HTMLElement>) {
     const point = getCanvasPoint(event.clientX, event.clientY);
     const menuPoint = getCanvasConnectionMenuPoint(
@@ -5978,17 +6161,18 @@ function UnifiedCanvasView({
     event.stopPropagation();
   }
 
-  function createCanvasNodeFromDraft(kind: CanvasNodeKind) {
+  function createCanvasNodeFromDraft(action: CanvasBranchAction) {
     if (!connectionDraft) {
       return;
     }
 
+    const kind: CanvasNodeKind = action === "walkthrough" ? "video" : "image";
     const sourceNode = canvasNodes.find(
       (node) => node.id === connectionDraft.sourceNodeId,
     );
     const nodeCount = canvasNodes.filter((node) => node.kind === kind).length + 1;
     const size = canvasNodeSizes[kind];
-    const node = createCanvasNode(
+    const baseNode = createCanvasNode(
       kind,
       {
         x: connectionDraft.worldX + 42,
@@ -5996,6 +6180,27 @@ function UnifiedCanvasView({
       },
       nodeCount,
     );
+    const promptSeeds: Partial<Record<CanvasBranchAction, string>> = {
+      "scheme-image": "基于上游场地资料生成完整景观方案图，明确空间结构、功能游线、植物层次与材料关系。",
+      variation: "在保留场地尺度与关键约束的前提下，创建一个清晰可比较的景观方向变体。",
+      detail: "聚焦当前方案的关键节点，深化植物、材料、构筑物和人尺度细节。",
+      walkthrough: "生成连续的景观空间漫游，保持主体、尺度、植物与材料的前后连续性。",
+    };
+    const modeByAction: Record<CanvasBranchAction, LandscapeGenerationMode> = {
+      "scheme-image": "preserve",
+      reference: "free",
+      variation: "variation",
+      detail: "local-edit",
+      walkthrough: "preserve",
+    };
+    const node = {
+      ...baseNode,
+      prompt: promptSeeds[action] ?? baseNode.prompt,
+      params: {
+        ...baseNode.params,
+        generationMode: modeByAction[action],
+      },
+    };
 
     if (!sourceNode || !canConnectCanvasNodes(sourceNode, node)) {
       setConnectionDraft(null);
@@ -6010,12 +6215,21 @@ function UnifiedCanvasView({
         id: createId("canvas-edge"),
         from: sourceNode.id,
         to: node.id,
-        role: getDefaultCanvasEdgeRole(sourceNode, node, current),
+        role:
+          action === "reference"
+            ? "style-reference"
+            : getDefaultCanvasEdgeRole(sourceNode, node, current),
       },
     ]);
     setActiveCanvasNodeId(node.id);
     setConnectionDraft(null);
     setConnectionTargetNodeId(null);
+
+    if (action === "reference") {
+      pendingUploadNodeId.current = node.id;
+      pendingCreatedUploadNodeId.current = node.id;
+      window.setTimeout(() => imageUploadInputRef.current?.click(), 0);
+    }
   }
 
   async function generateCanvasNodePrompt(nodeId: string) {
@@ -6074,7 +6288,10 @@ function UnifiedCanvasView({
     const targetImageCount = node.params.imageCount ?? "1";
     const canvasImageReferences = getCanvasImageGenerationReferences(node.id);
     const primaryImageUrl = canvasImageReferences[0]?.url ?? "";
-    const mainImageReference = canvasImageReferences.find((reference) => reference.role === "main-image") ?? null;
+    const mainImageReference =
+      canvasImageReferences.find((reference) =>
+        isCanvasPrimaryImageRole(reference.role),
+      ) ?? null;
     const selectedCanvasImageReferences = getSelectedCanvasImageReferences(node.prompt, canvasImageReferences);
     const versionId = createId("canvas-image-version");
 
@@ -6084,6 +6301,7 @@ function UnifiedCanvasView({
       url: "",
       prompt: userPrompt,
       params: {
+        generationMode: node.params.generationMode,
         imageResolution: targetResolution,
         imageAspectRatio: targetAspectRatio,
         imageCount: targetImageCount,
@@ -6339,6 +6557,7 @@ function UnifiedCanvasView({
       url: "",
       prompt: promptWithCamera,
       params: {
+        generationMode: node.params.generationMode,
         aspectRatio,
         videoResolution: resolution,
         duration,
@@ -6617,6 +6836,34 @@ function UnifiedCanvasView({
         onPointerUp={finishCanvasPan}
         onPointerCancel={finishCanvasPan}
       >
+        {canvasNodes.length === 0 && (
+          <div
+            className="canvas-empty-state"
+            onPointerDown={(event) => event.stopPropagation()}
+          >
+            <span className="canvas-empty-kicker">方案画布</span>
+            <h2>从场地证据开始</h2>
+            <p>上传底图或现状资料，再用连接点推演方案方向、节点深化和漫游。</p>
+            <div className="canvas-empty-actions">
+              <button type="button" onClick={() => createCanvasStarterUpload("场地底图")}>
+                <UploadSimple size={17} weight="bold" />
+                上传场地底图
+              </button>
+              <button type="button" onClick={() => createCanvasStarterUpload("现状照片")}>
+                <ImageIcon size={17} weight="bold" />
+                上传现状照片
+              </button>
+              <button type="button" onClick={() => createCanvasStarterUpload("意向参考")}>
+                <ShareNetwork size={17} weight="bold" />
+                添加意向参考
+              </button>
+              <button type="button" onClick={createCanvasStarterSchemeNode}>
+                <PlusCircle size={17} weight="bold" />
+                创建方案图节点
+              </button>
+            </div>
+          </div>
+        )}
         <div className="visual-canvas-world" style={worldStyle}>
           <svg
             className="visual-canvas-links"
@@ -6696,6 +6943,10 @@ function UnifiedCanvasView({
                   : true
               }
               connectionTarget={connectionTargetNodeId === node.id}
+              menuOpen={
+                connectionDraft?.sourceNodeId === node.id &&
+                connectionDraft.isChoosing
+              }
               isReplaceableImage={isReplaceableCanvasImageNode(node, canvasEdges)}
               key={node.id}
               mentionOptions={getCanvasPromptMentionOptions(node.id)}
@@ -6703,6 +6954,7 @@ function UnifiedCanvasView({
               promptError={canvasPromptErrors[node.id] ?? ""}
               promptGenerating={promptingCanvasNodeId === node.id}
               onConnectionPointerDown={beginCanvasConnectionDrag}
+              onConnectionKeyboardOpen={openCanvasConnectionMenuFromKeyboard}
               onConnectionPointerEnd={finishCanvasConnectionDrag}
               onConnectionPointerMove={updateCanvasConnectionDrag}
               onDelete={deleteCanvasNode}
@@ -6734,17 +6986,38 @@ function UnifiedCanvasView({
               }}
               onPointerDown={(event) => event.stopPropagation()}
             >
-              <span>引用该节点生成</span>
+              <span>从该成果继续推演</span>
               <button
                 type="button"
                 disabled={!canConnectCanvasNodes(
                   draftSourceNode,
                   createCanvasConnectionPreviewNode("image"),
                 )}
-                onClick={() => createCanvasNodeFromDraft("image")}
+                onClick={() => createCanvasNodeFromDraft("scheme-image")}
               >
                 <ImageIcon size={17} weight="bold" />
-                接图片节点
+                生成方案图
+              </button>
+              <button
+                type="button"
+                onClick={() => createCanvasNodeFromDraft("reference")}
+              >
+                <UploadSimple size={17} weight="bold" />
+                添加参考
+              </button>
+              <button
+                type="button"
+                onClick={() => createCanvasNodeFromDraft("variation")}
+              >
+                <ShareNetwork size={17} weight="bold" />
+                创建方向变体
+              </button>
+              <button
+                type="button"
+                onClick={() => createCanvasNodeFromDraft("detail")}
+              >
+                <MagnifyingGlassPlus size={17} weight="bold" />
+                局部深化
               </button>
               <button
                 type="button"
@@ -6752,10 +7025,10 @@ function UnifiedCanvasView({
                   draftSourceNode,
                   createCanvasConnectionPreviewNode("video"),
                 )}
-                onClick={() => createCanvasNodeFromDraft("video")}
+                onClick={() => createCanvasNodeFromDraft("walkthrough")}
               >
                 <VideoCamera size={17} weight="bold" />
-                接视频节点
+                生成漫游
               </button>
             </div>
           )}
@@ -6976,11 +7249,13 @@ function CanvasNodeCard({
   active,
   canGenerate,
   connectionTarget,
+  menuOpen,
   isReplaceableImage,
   mentionOptions,
   promptError,
   promptGenerating,
   onConnectionPointerDown,
+  onConnectionKeyboardOpen,
   onConnectionPointerMove,
   onConnectionPointerEnd,
   onDelete,
@@ -7004,6 +7279,7 @@ function CanvasNodeCard({
   active: boolean;
   canGenerate: boolean;
   connectionTarget: boolean;
+  menuOpen: boolean;
   isReplaceableImage: boolean;
   mentionOptions: CanvasImageReference[];
   promptError: string;
@@ -7011,6 +7287,10 @@ function CanvasNodeCard({
   onConnectionPointerDown: (
     event: ReactPointerEvent<HTMLElement>,
     node: CanvasNode,
+  ) => void;
+  onConnectionKeyboardOpen: (
+    node: CanvasNode,
+    connector: HTMLButtonElement,
   ) => void;
   onConnectionPointerMove: (event: ReactPointerEvent<HTMLElement>) => void;
   onConnectionPointerEnd: (event: ReactPointerEvent<HTMLElement>) => void;
@@ -7079,7 +7359,7 @@ function CanvasNodeCard({
         : "上传或生成视频";
   const promptPlaceholder =
     node.kind === "image"
-      ? "描述要生成的灯光效果图"
+      ? "描述空间、植物、材料、季节与使用场景"
       : "描述视频画面、运动、节奏和镜头";
   const showControlPanel = shouldShowCanvasNodeControlPanel(
     node,
@@ -7108,6 +7388,8 @@ function CanvasNodeCard({
       className={`visual-node canvas-node ${node.kind} ${
         active ? "active" : ""
       } ${connectionTarget ? "connection-target" : ""} ${
+        menuOpen ? "menu-open" : ""
+      } ${
         showSaveAction ? "has-save-action" : ""
       } ${
         showControlPanel ? "" : "media-only"
@@ -7254,13 +7536,23 @@ function CanvasNodeCard({
         <button
           className="canvas-node-connector"
           type="button"
+          data-canvas-connector-node-id={node.id}
           onPointerDown={(event) => onConnectionPointerDown(event, node)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              event.stopPropagation();
+              onConnectionKeyboardOpen(node, event.currentTarget);
+            }
+          }}
           onPointerMove={onConnectionPointerMove}
           onPointerUp={onConnectionPointerEnd}
           onPointerCancel={onConnectionPointerEnd}
-          aria-label={`从${node.title}连接新节点`}
+          aria-label={`从${node.title}创建方案分支`}
         >
-          <PlusCircle size={24} weight="bold" />
+          <span className="canvas-node-connector-icon" aria-hidden="true">
+            <PlusCircle size={26} weight="bold" />
+          </span>
         </button>
         <span
           className="visual-resize-handle"
@@ -7334,7 +7626,7 @@ function CanvasNodeCard({
                   >
                     <span>{option.title}</span>
                     <small className="canvas-node-mention-role">
-                      {option.role === "main-image" ? "主图" : "参考图"}
+                      {canvasEdgeRoleLabels[option.role]}
                     </small>
                   </button>
                 ))}
@@ -7344,6 +7636,15 @@ function CanvasNodeCard({
               <small className="canvas-node-prompt-error">{promptError}</small>
             )}
           </label>
+          {version?.status === "error" && (
+            <div className="canvas-node-error" role="alert">
+              <span>{version.outputText || "当前节点生成失败，请检查输入后重试。"}</span>
+              <button type="button" onClick={() => onGenerate(node.id)}>
+                <ArrowClockwise size={14} weight="bold" />
+                重试当前节点
+              </button>
+            </div>
+          )}
           {node.kind === "image" ? (
             <div className="canvas-node-image-toolbar">
               <button
@@ -7354,6 +7655,17 @@ function CanvasNodeCard({
                 <UploadSimple size={15} weight="bold" />
                 参考图
               </button>
+              <label className="canvas-node-inline-field mode">
+                <span>模式</span>
+                <DropdownSelect
+                  value={node.params.generationMode}
+                  onValueChange={(value) =>
+                    onParamChange(node.id, "generationMode", value)
+                  }
+                  ariaLabel="选择景观生成模式"
+                  options={landscapeGenerationModeOptions}
+                />
+              </label>
               <label className="canvas-node-inline-field">
                 <span>分辨率</span>
                 <DropdownSelect
@@ -8709,9 +9021,23 @@ function TextView({
   const hasConversation = documentMessages.length > 0;
   const hasOutline = outlineSections.length > 0;
   const hasOutput =
-    documentOutputPages.some((page) => page.imageUrl || page.resultText) ||
+    documentOutputPages.length > 0 ||
     documentOutput.trim().length > 0;
-  const canExport = hasOutput;
+  const canExport = documentOutputPages.length
+    ? documentOutputPages.every(
+        (page) => page.status === "done" && page.imageUrl,
+      )
+    : documentOutput.trim().length > 0;
+  const documentStage = getDocumentStage(outline, documentOutputPages);
+  const documentStageIndex = documentStages.findIndex(
+    (stage) => stage.id === documentStage,
+  );
+  const completedDocumentPages = documentOutputPages.filter(
+    (page) => page.status === "done",
+  ).length;
+  const otherPendingDocumentPages = documentOutputPages.filter(
+    (page) => page.status === "idle" || page.status === "error",
+  ).length;
   const displayUserName = userName.trim() || "用户";
   const outputAbortControllerRef = useRef<AbortController | null>(null);
   const documentUploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -8766,36 +9092,38 @@ function TextView({
       : "暂无画布生成图片。";
 
     return [
-      "你是 Zerlum照明系统的大纲生成模块。",
-      "对外说明身份时，只说“我是 Zerlum照明系统”。",
-      "你的信息只来自用户提交资料、Zerlum Agent 聊天输出和画布生成图片。",
-      "同时遵循已挂载的 Lighting Skill 9 个 md 作为照明设计专业约束。",
+      "你是 Zerlum 景观设计系统的大纲生成模块。",
+      "对外说明身份时，只说“我是 Zerlum 景观设计系统”。",
+      "项目依据只来自用户提交的项目简报与场地资料、Zerlum Agent 已确认结论和画布方案成果。",
+      "使用 Landscape Skill 组织景观设计方法、页面角色和质量检查。",
       "不要调用或引用任何 agent.md、数据库或联网检索结果。",
-      "Lighting Skill 只能作为专业方法约束，不能当作项目事实来源。",
+      "Landscape Skill 只能作为专业方法约束，不能当作项目事实来源。",
       "不要读取或引用平台页面信息、项目卡片字段、导航状态或任何未显式传入的页面内容。",
       "如果已收到任一来源，就只根据这些显式输入生成简洁大纲。",
-      "如果目前没有收到用户提交资料、Agent 输出或画布图片，就回复：目前没有收到可用于生成大纲的资料。",
+      "如果目前没有收到项目简报与场地资料、Agent 已确认结论或画布方案成果，就回复：目前没有收到可用于生成大纲的资料。",
       "先用一句话说明身份和信息来源，再输出大纲；不要解释推理过程，不要输出正文示例。",
       "版式默认 16:9 横屏。",
       "大纲开头必须先写清楚排版风格和字体要求。",
-      "先判断项目类型、空间气质、目标受众和显式资料里可推导的表达风格。",
+      "先判断景观项目类型、设计阶段、场地问题、目标人群和显式资料里可推导的表达基调。",
       "给出 2-3 条视觉路线，并选择最适合本项目的一条作为整套方案基调。",
       "不要让整套方案全篇都放画布生成效果图。",
-      "效果图页只用于封面、重点空间、关键体验或前后对比等必要页面。",
-      "其余页面应使用概念叙事、材质/光影板、平面/节点分析、灯光策略图、动线或时间线等页面类型。",
+      "效果图页只用于封面、设计方向、重点节点、关键体验或前后对比等必要页面。",
+      "其余页面应使用场地分析、结构图、游线图、植物板、材料板、节点分析或运营时间线等页面类型。",
+      "根据资料选择项目理解、场地问题和机会、设计概念、总体空间结构、功能、游线与使用场景、关键节点、植物与季相策略、材料、铺装和构筑物、生态水策略、运营分期和待复核项等页面。",
+      "明确区分项目事实、设计判断与待复核项。",
       "每页必须标注页面类型、主要视觉元素、是否使用画布生成图以及使用方式。",
       "随后逐页写清楚每页的排版内容、版面位置和图文层级。",
       "",
       "【已上传项目资料清单】",
       materialSummary,
       "",
-      "【用户提交资料内容】",
+      "【用户提交的项目简报与场地资料】",
       materialContent,
       "",
-      "【Zerlum Agent 聊天输出】",
+      "【Zerlum Agent 已确认结论】",
       agentOutputSummary,
       "",
-      "【画布生成图片】",
+      "【画布方案成果】",
       canvasImageSummary,
       "",
       `用户原始要求：${userRequest}`,
@@ -8978,7 +9306,7 @@ function TextView({
         userMessage,
         {
           ...assistantMessage,
-          text: "我是 Zerlum照明系统。我的信息只来自用户提交资料、Zerlum Agent 聊天输出和画布生成图片。目前没有收到可用于生成大纲的资料。",
+          text: "我是 Zerlum 景观设计系统。项目依据只来自用户提交的项目简报与场地资料、Zerlum Agent 已确认结论和画布方案成果。目前没有收到可用于生成大纲的资料。",
           status: "done",
         },
       ]);
@@ -9081,7 +9409,7 @@ function TextView({
 
         try {
           const rawResult = await requestDocumentAgent({
-            message: buildDocumentPageImagePrompt(page, outputPages.length),
+            message: buildDocumentPageImagePrompt(page, outputPages.length, project),
             assistantId,
             onText: () => undefined,
             finalFallback: "方案 Agent 暂时没有返回可用方案图片。",
@@ -9236,6 +9564,149 @@ function TextView({
     }
   }
 
+  async function retryDocumentPage(pageId: string) {
+    if (outputStatus === "streaming") {
+      return;
+    }
+
+    const page = documentOutputPages.find((item) => item.id === pageId);
+
+    if (!page) {
+      return;
+    }
+
+    const assistantId = createId("document-page-retry");
+    const controller = new AbortController();
+
+    outputAbortControllerRef.current = controller;
+    setOutputStatus("streaming");
+    setDocumentMessages((current) => [
+      ...current,
+      {
+        id: assistantId,
+        role: "assistant",
+        text: `正在重新生成第 ${page.pageNumber} 页…`,
+        status: "streaming",
+      },
+    ]);
+    setDocumentOutputPages((current) =>
+      current.map((item) =>
+        item.id === pageId
+          ? {
+              ...item,
+              status: "streaming",
+              imageUrl: "",
+              resultText: "",
+              errorText: undefined,
+            }
+          : item,
+      ),
+    );
+
+    try {
+      const rawResult = await requestDocumentAgent({
+        message: buildDocumentPageImagePrompt(
+          page,
+          documentOutputPages.length,
+          project,
+        ),
+        assistantId,
+        onText: () => undefined,
+        finalFallback: "本页暂时没有返回可用方案图片。",
+        agentTask: "document-output",
+        images: canvasGeneratedImages,
+        signal: controller.signal,
+        displayText: () => `正在重新生成第 ${page.pageNumber} 页…`,
+      });
+      const parsedResult = parseDocumentOutputPageResult(rawResult);
+      const pageStatus = parsedResult.imageUrl ? "done" : "error";
+      const resultText =
+        parsedResult.resultText ||
+        (parsedResult.imageUrl ? "图片已生成。" : "本页没有返回可用图片。");
+
+      setDocumentOutputPages((current) =>
+        current.map((item) =>
+          item.id === pageId
+            ? {
+                ...item,
+                status: pageStatus,
+                imageUrl: parsedResult.imageUrl,
+                resultText,
+                promptText: parsedResult.promptText,
+                errorText: pageStatus === "error" ? resultText : undefined,
+              }
+            : item,
+        ),
+      );
+    } catch (pageError) {
+      if (controller.signal.aborted) {
+        setDocumentOutputPages((current) =>
+          current.map((item) =>
+            item.id === pageId
+              ? {
+                  ...item,
+                  status: "idle",
+                  resultText: "本页重试已暂停，可稍后继续。",
+                }
+              : item,
+          ),
+        );
+        setDocumentMessages((current) =>
+          current.map((item) =>
+            item.id === assistantId
+              ? {
+                  ...item,
+                  text: `第 ${page.pageNumber} 页重试已暂停。`,
+                  status: "done",
+                }
+              : item,
+          ),
+        );
+      } else {
+        const pageErrorText = formatDocumentPageError(pageError);
+
+        setDocumentOutputPages((current) =>
+          current.map((item) =>
+            item.id === pageId
+              ? {
+                  ...item,
+                  status: "error",
+                  resultText: pageErrorText,
+                  errorText: pageErrorText,
+                }
+              : item,
+          ),
+        );
+        setDocumentMessages((current) =>
+          current.map((item) =>
+            item.id === assistantId
+              ? { ...item, text: pageErrorText, status: "error" }
+              : item,
+          ),
+        );
+      }
+    } finally {
+      if (outputAbortControllerRef.current === controller) {
+        outputAbortControllerRef.current = null;
+      }
+      setOutputStatus("idle");
+    }
+  }
+
+  async function continueGeneratingOtherPages(pageId: string) {
+    const pendingPageIds = documentOutputPages
+      .filter(
+        (page) =>
+          page.id !== pageId &&
+          (page.status === "idle" || page.status === "error"),
+      )
+      .map((page) => page.id);
+
+    for (const pendingPageId of pendingPageIds) {
+      await retryDocumentPage(pendingPageId);
+    }
+  }
+
   function handlePauseDocumentOutput() {
     outputAbortControllerRef.current?.abort();
   }
@@ -9256,6 +9727,40 @@ function TextView({
 
   return (
     <div className="document-workspace">
+      <ol className="document-stage-bar" aria-label="文本交付流程">
+        {documentStages.map((stage, index) => {
+          const isActive = stage.id === documentStage;
+          const isComplete = index < documentStageIndex;
+          let statusText = stage.description;
+
+          if (stage.id === "sources") {
+            statusText = materials.length
+              ? `${materials.length} 份资料已接入`
+              : "等待上传项目资料";
+          } else if (stage.id === "outline" && hasOutline) {
+            statusText = `${outlineSections.length} 个章节可编辑`;
+          } else if (stage.id === "pages" && documentOutputPages.length) {
+            statusText = `${completedDocumentPages}/${documentOutputPages.length} 页已完成`;
+          } else if (stage.id === "review" && canExport) {
+            statusText = "可校对并导出 PDF";
+          }
+
+          return (
+            <li
+              className={`${isActive ? "active" : ""} ${isComplete ? "complete" : ""}`.trim()}
+              key={stage.id}
+            >
+              <span aria-hidden="true">
+                {isComplete ? <CheckCircle size={18} weight="fill" /> : index + 1}
+              </span>
+              <div>
+                <strong>{stage.label}</strong>
+                <small>{statusText}</small>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
       <section className="document-agent-panel" aria-label="方案 Agent">
         <header className="document-agent-brand">
           <img src="/brand/zerlum-logo-mark.png" alt="" />
@@ -9392,6 +9897,30 @@ function TextView({
                       <img src={page.imageUrl} alt={`${page.title} 图片方案`} />
                     ) : (
                       <pre>{page.errorText || page.resultText || "正在生成图片方案..."}</pre>
+                    )}
+                    {page.status === "error" && (
+                      <div className="document-page-recovery">
+                        <button
+                          className="secondary-button compact"
+                          type="button"
+                          disabled={outputStatus === "streaming"}
+                          onClick={() => retryDocumentPage(page.id)}
+                        >
+                          <ArrowClockwise size={16} weight="bold" />
+                          重试本页
+                        </button>
+                        <button
+                          className="ghost-button compact"
+                          type="button"
+                          disabled={
+                            outputStatus === "streaming" ||
+                            otherPendingDocumentPages <= 1
+                          }
+                          onClick={() => continueGeneratingOtherPages(page.id)}
+                        >
+                          继续生成其他页面
+                        </button>
+                      </div>
                     )}
                   </article>
                 ))}

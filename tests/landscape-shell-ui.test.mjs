@@ -60,3 +60,21 @@ test("shell uses the graphite and moss token system with reduced motion", () => 
   assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(styles, /\.workspace-persistence-status/);
 });
+
+test("mobile shell keeps the new landscape project action available", () => {
+  const mobileShellStyles = styles.slice(
+    styles.lastIndexOf("@media (max-width: 760px)"),
+  );
+
+  assert.doesNotMatch(
+    mobileShellStyles,
+    /\.profile-button span,\s*\.header-new-project\s*\{\s*display:\s*none/,
+  );
+  assert.match(mobileShellStyles, /\.brand-lockup\s*\{\s*gap:\s*8px/);
+  assert.match(mobileShellStyles, /\.brand-logo-image\s*\{\s*width:\s*56px/);
+  assert.match(
+    mobileShellStyles,
+    /\.header-project-dropdown\s*\{\s*width:\s*min\(34vw,\s*128px\)/,
+  );
+  assert.match(mobileShellStyles, /\.profile-tools\s*\{\s*gap:\s*4px/);
+});

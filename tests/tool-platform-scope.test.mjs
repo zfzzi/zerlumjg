@@ -69,6 +69,11 @@ test("desktop markdown and fixed agent markdown context are no longer mounted", 
     "knowledge",
     "desktop-lighting-library",
   );
+  const landscapeKnowledgeRoot = join(
+    rootPath,
+    "knowledge",
+    "landscape-design-library",
+  );
   const agentInstructionFiles = existsSync(agentsRoot)
     ? readdirSync(agentsRoot, { recursive: true })
         .map(String)
@@ -80,7 +85,8 @@ test("desktop markdown and fixed agent markdown context are no longer mounted", 
 
   assert.deepEqual(agentInstructionFiles, []);
   assert.deepEqual(agentContextFiles.sort(), []);
-  assert.equal(existsSync(oldKnowledgeRoot), true);
+  assert.equal(existsSync(oldKnowledgeRoot), false);
+  assert.equal(existsSync(landscapeKnowledgeRoot), true);
   assert.doesNotMatch(appSource, /desktopKnowledgeIndexJson|markdown-index\.json/);
 });
 

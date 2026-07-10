@@ -6,6 +6,10 @@ const appSource = readFileSync(
   new URL("../src/App.tsx", import.meta.url),
   "utf8",
 );
+const headerSource = readFileSync(
+  new URL("../src/shell/WorkspaceHeader.tsx", import.meta.url),
+  "utf8",
+);
 const stylesSource = readFileSync(
   new URL("../src/styles.css", import.meta.url),
   "utf8",
@@ -37,7 +41,7 @@ const unifiedCanvasFunction = appSource.slice(
 );
 
 test("workspace navigation uses one unified AI canvas entry for image and video creation", () => {
-  assert.match(appSource, /\{ id: "canvas", label: "AI无限画布", icon: ImageIcon \}/);
+  assert.match(headerSource, /\{ id: "canvas", label: "方案画布" \}/);
   assert.doesNotMatch(appSource, /\{ id: "video", label: "视频创作"/);
   assert.doesNotMatch(appSource, /activeView !== "video"/);
   assert.doesNotMatch(appSource, /activeView === "video"/);
@@ -48,7 +52,7 @@ test("unified canvas exposes image and video node types with version history", (
   assert.match(appSource, /type CanvasNodeKind = "image" \| "video";/);
   assert.match(
     appSource,
-    /type CanvasEdgeRole =\s*\|\s*"main-image"\s*\|\s*"reference-image"\s*\|\s*"first-frame"\s*\|\s*"reference-video";/,
+    /type CanvasEdgeRole =[\s\S]*"site-base"[\s\S]*"main-scene"[\s\S]*"style-reference"[\s\S]*"material-reference"[\s\S]*"planting-reference"[\s\S]*"first-frame"[\s\S]*"last-frame"/,
   );
   assert.match(appSource, /type CanvasGenerationVersion = \{/);
   assert.match(appSource, /versions: CanvasGenerationVersion\[\];/);
@@ -72,8 +76,8 @@ test("canvas node titles use concise image and video numbering", () => {
 
 test("unified canvas connection rules infer edge roles and block video to image", () => {
   assert.match(appSource, /function getDefaultCanvasEdgeRole/);
-  assert.match(appSource, /return "main-image";/);
-  assert.match(appSource, /return "reference-image";/);
+  assert.match(appSource, /return isUploadedCanvasImageNode\(source\) \? "site-base" : "main-scene";/);
+  assert.match(appSource, /return "style-reference";/);
   assert.match(appSource, /return "first-frame";/);
   assert.match(appSource, /return "reference-video";/);
   assert.match(appSource, /function canConnectCanvasNodes/);
@@ -105,7 +109,7 @@ test("canvas image references connect outward from image nodes with media output
   );
   assert.match(
     appSource,
-    /if \(!isUploadedCanvasImageNode\(source\)\) \{[\s\S]*return "reference-image";[\s\S]*const hasFirstFrame/,
+    /const hasFirstFrame = existingEdges\.some\([\s\S]*edge\.role === "first-frame"/,
   );
   assert.match(appSource, /const hasMainImage = existingEdges\.some/);
   assert.match(
@@ -299,7 +303,7 @@ test("image reference button creates a connected reference image node", () => {
   assert.match(appSource, /title: `图像 \$\{count\}`/);
   assert.match(
     appSource,
-    /from: node\.id,[\s\S]*to: targetNode\.id,[\s\S]*role: "reference-image"/,
+    /from: node\.id,[\s\S]*to: targetNode\.id,[\s\S]*role: "style-reference"/,
   );
   assert.match(
     appSource,
@@ -322,11 +326,11 @@ test("manually connected image nodes can become generation references", () => {
   assert.match(appSource, /function getCanvasImageEdgeRole/);
   assert.match(
     appSource,
-    /const hasMainImage = existingEdges\.some\([\s\S]*edge\.to === target\.id[\s\S]*edge\.role === "main-image"/,
+    /const hasMainImage = existingEdges\.some\([\s\S]*edge\.to === target\.id[\s\S]*isCanvasPrimaryImageRole\(edge\.role\)/,
   );
   assert.match(
     appSource,
-    /if \(hasMainImage\) \{[\s\S]*return "reference-image";/,
+    /if \(hasMainImage\) \{[\s\S]*return "style-reference";/,
   );
   assert.match(
     appSource,
@@ -353,11 +357,11 @@ test("reference image nodes expose a replace image action", () => {
   assert.match(appSource, /function isReplaceableCanvasImageNode\(node: CanvasNode, edges: CanvasEdge\[\]\)/);
   assert.match(
     appSource,
-    /node\.kind === "image"[\s\S]*edge\.from === node\.id && edge\.role === "reference-image"/,
+    /node\.kind === "image"[\s\S]*edge\.from === node\.id && isCanvasReferenceImageRole\(edge\.role\)/,
   );
   assert.match(
     appSource,
-    /node\.kind === "image"[\s\S]*edge\.from === node\.id && edge\.role === "main-image"/,
+    /node\.kind === "image"[\s\S]*edge\.from === node\.id && isCanvasPrimaryImageRole\(edge\.role\)/,
   );
   assert.match(appSource, /function replaceCanvasReferenceImageNode\(nodeId: string\)/);
   assert.match(
@@ -498,7 +502,7 @@ test("canvas prompt text area handles wheel scrolling inside the prompt box", ()
 
 test("canvas prompt images include the main image without requiring reference images", () => {
   assert.match(appSource, /function getCanvasPromptImageReferences/);
-  assert.match(appSource, /const mainImages = nextReferences\.filter\(\s*\(reference\) => reference\.role === "main-image"/);
+  assert.match(appSource, /const mainImages = nextReferences\.filter\(\s*\(reference\) => isCanvasPrimaryImageRole\(reference\.role\)/);
   assert.match(appSource, /const selectedReferences = referenceImages\.filter\(\s*\(reference\) => reference\.mentioned/);
   assert.match(appSource, /return \[\.\.\.mainImages, \.\.\.\(selectedReferences\.length > 0 \? selectedReferences : referenceImages\)\];/);
   assert.match(
@@ -520,7 +524,7 @@ test("generated image nodes keep regeneration controls and use incoming referenc
     /const canvasImageReferences = getCanvasImageGenerationReferences\(node\.id\);/,
   );
   assert.match(appSource, /const primaryImageUrl = canvasImageReferences\[0\]\?\.url \?\? "";/);
-  assert.match(appSource, /const mainImageReference = canvasImageReferences\.find\(\(reference\) => reference\.role === "main-image"\) \?\? null;/);
+  assert.match(appSource, /const mainImageReference =[\s\S]*canvasImageReferences\.find\(\(reference\) =>[\s\S]*isCanvasPrimaryImageRole\(reference\.role\)[\s\S]*\) \?\? null;/);
   assert.match(appSource, /const selectedCanvasImageReferences = getSelectedCanvasImageReferences\(node\.prompt, canvasImageReferences\);/);
   assert.match(
     appSource,
@@ -728,8 +732,8 @@ test("canvas media nodes expose a hover connector that opens a node-type chooser
   assert.match(appSource, /createCanvasNodeFromDraft/);
   assert.match(appSource, /className="canvas-node-connector"/);
   assert.match(appSource, /className="canvas-node-type-menu"/);
-  assert.match(appSource, /接图片节点/);
-  assert.match(appSource, /接视频节点/);
+  assert.match(appSource, /生成方案图/);
+  assert.match(appSource, /生成漫游/);
   assert.match(stylesSource, /\.canvas-node \.visual-node-topline/);
   assert.match(stylesSource, /opacity:\s*0/);
   assert.match(stylesSource, /\.canvas-node:hover \.canvas-node-connector/);
@@ -751,7 +755,7 @@ test("canvas connector drag starts from the visible connector center", () => {
   assert.doesNotMatch(appSource, /startY: node\.y \+ size\.height \/ 2,/);
 });
 
-test("canvas connector stays fixed at the node right center", () => {
+test("canvas connector has a stable overlapping 48px hit target", () => {
   assert.doesNotMatch(appSource, /canvasConnectorMagnet/);
   assert.doesNotMatch(appSource, /function updateConnectorMagnetPoint/);
   assert.doesNotMatch(appSource, /function resetConnectorMagnetPoint/);
@@ -759,18 +763,19 @@ test("canvas connector stays fixed at the node right center", () => {
   assert.doesNotMatch(appSource, /--connector-[xy]/);
   assert.match(
     canvasNodeCardSource,
-    /<button\s+className="canvas-node-connector"[\s\S]*onPointerDown=\{\(event\) => onConnectionPointerDown\(event, node\)\}/,
+    /<button\s+className="canvas-node-connector"[\s\S]*onPointerDown=\{\(event\) => onConnectionPointerDown\(event, node\)\}[\s\S]*<span className="canvas-node-connector-icon"/,
   );
 
   assert.doesNotMatch(stylesSource, /\.canvas-node-connector-magnet/);
   assert.doesNotMatch(stylesSource, /var\(--connector-[xy]/);
   assert.match(
     stylesSource,
-    /\.canvas-node-connector\s*{[\s\S]*top:\s*50%;[\s\S]*right:\s*-18px;[\s\S]*transform:\s*translate\(12px,\s*-50%\) scale\(0\.88\);/,
+    /\.canvas-node-connector\s*{[\s\S]*top:\s*50%;[\s\S]*right:\s*-24px;[\s\S]*width:\s*48px;[\s\S]*height:\s*48px;[\s\S]*transform:\s*translateY\(-50%\);/,
   );
+  assert.match(stylesSource, /\.canvas-node-connector-icon\s*{/);
   assert.match(
     stylesSource,
-    /\.canvas-node:hover \.canvas-node-connector,[\s\S]*\.canvas-node.active \.canvas-node-connector,[\s\S]*\.canvas-node-connector:focus-visible\s*{[\s\S]*transform:\s*translate\(50%,\s*-50%\) scale\(1\);/,
+    /\.canvas-node:hover \.canvas-node-connector,[\s\S]*\.canvas-node.active \.canvas-node-connector,[\s\S]*\.canvas-node:focus-within \.canvas-node-connector,[\s\S]*\.canvas-node\.menu-open \.canvas-node-connector/,
   );
 });
 

@@ -1,8 +1,9 @@
 node_modules/
 dist/
 knowledge/*
-!knowledge/desktop-lighting-library/
-!knowledge/desktop-lighting-library/**
+!knowledge/landscape-design-library/
+knowledge/landscape-design-library/*
+!knowledge/landscape-design-library/README.md
 database/
 databases/
 data/database/

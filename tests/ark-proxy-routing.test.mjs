@@ -149,8 +149,8 @@ test("canvas prompt proxy produces evidence-led landscape visualization prompts"
   assert.match(promptProxyBlock, /可直接用于景观效果图生成/);
   assert.match(promptProxyBlock, /保结构优化、概念改造、局部替换、方向变体、季节时间变化还是自由生成/);
   assert.match(apiPromptHandlerBlock, /保结构优化、概念改造、局部替换、方向变体、季节时间变化还是自由生成/);
-  assert.match(promptProxyBlock, /用户已有提示词、项目资料和参考图的明确要求优先/);
-  assert.match(apiPromptHandlerBlock, /用户已有提示词、项目资料和参考图的明确要求优先/);
+  assert.match(promptProxyBlock, /用户明确要求 > 项目资料 > 画布显式关系 > 已确认设计结论 > 方法框架/);
+  assert.match(apiPromptHandlerBlock, /用户明确要求 > 项目资料 > 画布显式关系 > 已确认设计结论 > 方法框架/);
   assert.match(promptProxyBlock, /空间层次、功能和游线、植物群落与成熟度、材料尺度与接缝/);
   assert.match(apiPromptHandlerBlock, /空间层次、功能和游线、植物群落与成熟度、材料尺度与接缝/);
   assert.match(promptProxyBlock, /不得无依据增加路径、水景、构筑物、地形或大规模人群/);

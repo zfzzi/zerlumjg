@@ -38,7 +38,7 @@ test("document output splits paginated outlines and sends one image2 request per
   assert.match(appSource, /严格按大纲中的“页面类型”设计本页。/);
   assert.match(appSource, /如果本页不是效果图页，不要把画布生成图铺满当作主视觉。/);
   assert.match(appSource, /只有大纲明确写成效果图页、重点空间渲染页或前后对比页时，才把效果图作为主视觉。/);
-  assert.match(appSource, /非效果图页优先使用概念叙事、材质\/光影板、平面\/节点分析、灯光策略图、动线或时间线等高级方案表达。/);
+  assert.match(appSource, /非效果图页优先使用场地分析、空间结构图、游线图、植物板、材料板、节点分析或运营时间线等专业景观表达。/);
   assert.match(appSource, /可以少量引用画布生成图作为局部裁切、氛围证据或辅助图，不要机械铺满整页。/);
   assert.doesNotMatch(appSource, /图面或效果图区域/);
   assert.match(appSource, /sourceDataUrl\?: string/);
@@ -47,7 +47,7 @@ test("document output splits paginated outlines and sends one image2 request per
   assert.match(appSource, /canvasGeneratedImages=\{canvasGeneratedImages\}/);
   assert.match(outputHandlerBlock, /const outputPages = splitDocumentOutlinePages\(outline\);/);
   assert.match(outputHandlerBlock, /for \(const page of outputPages\)/);
-  assert.match(outputHandlerBlock, /buildDocumentPageImagePrompt\(page, outputPages\.length\)/);
+  assert.match(outputHandlerBlock, /buildDocumentPageImagePrompt\(page, outputPages\.length, project\)/);
   assert.match(outputHandlerBlock, /agentTask: "document-output"/);
   assert.match(outputHandlerBlock, /images: canvasGeneratedImages/);
   assert.match(outputHandlerBlock, /setDocumentOutputPages/);
