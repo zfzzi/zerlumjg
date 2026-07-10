@@ -11,7 +11,7 @@ const apiSource = readFileSync(
   "utf8",
 );
 const appSource = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
-const localEnv = readFileSync(new URL("../.env.local", import.meta.url), "utf8");
+const localEnv = readFileSync(new URL("../.env.example", import.meta.url), "utf8");
 const configImageHandlerBlock = configSource.slice(
   configSource.indexOf('server.middlewares.use("/api/zerlum-image"'),
   configSource.indexOf('server.middlewares.use("/api/zerlum-video"'),
@@ -53,19 +53,19 @@ test("image upscale can resolve the RunningHub AI App run path", () => {
   assert.match(localEnv, /^RUNNINGHUB_UPSCALE_APP_PATH=\/run\/ai-app\/2074155000317702146$/m);
 });
 
-test("local image generation credentials are configured", () => {
-  assert.match(localEnv, /^RUNNINGHUB_IMAGE_API_KEY=.+$/m);
+test("environment template documents RunningHub image generation", () => {
+  assert.match(localEnv, /^RUNNINGHUB_IMAGE_API_KEY=$/m);
   assert.match(
     localEnv,
     /^RUNNINGHUB_IMAGE_ENDPOINT=https:\/\/www\.runninghub\.ai\/openapi\/v2\/rhart-imagine-image-quality\/edit$/m,
   );
-  assert.match(localEnv, /^RUNNINGHUB_UPSCALE_API_KEY=.+$/m);
+  assert.match(localEnv, /^RUNNINGHUB_UPSCALE_API_KEY=$/m);
   assert.match(localEnv, /^RUNNINGHUB_UPSCALE_WEBAPP_ID=2074155000317702146$/m);
 });
 
 test("image generation can use the qweapi OpenAI-compatible image channel", () => {
   assert.match(localEnv, /^IMAGE_GENERATION_PROVIDER=qweapi$/m);
-  assert.match(localEnv, /^OPENAI_IMAGE_API_KEY=.+$/m);
+  assert.match(localEnv, /^OPENAI_IMAGE_API_KEY=$/m);
   assert.match(localEnv, /^OPENAI_IMAGE_BASE_URL=https:\/\/qweapi\.com$/m);
   assert.match(localEnv, /^OPENAI_IMAGE_MODEL=gpt-image-2$/m);
 

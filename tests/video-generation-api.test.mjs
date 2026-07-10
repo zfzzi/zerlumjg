@@ -10,7 +10,7 @@ const viteSource = readFileSync(
   new URL("../vite.config.ts", import.meta.url),
   "utf8",
 );
-const localEnv = readFileSync(new URL("../.env.local", import.meta.url), "utf8");
+const localEnv = readFileSync(new URL("../.env.example", import.meta.url), "utf8");
 const videoProxyBlock = viteSource.slice(
   viteSource.indexOf('server.middlewares.use("/api/zerlum-video"'),
   viteSource.indexOf('server.middlewares.use("/api/zerlum-video-status"'),
@@ -138,7 +138,7 @@ test("canvas default zoom push preset uses the requested architectural camera pr
   );
 });
 
-test("local video generation configuration uses the Ark Seedance channel", () => {
-  assert.match(localEnv, /^ARK_VIDEO_API_KEY=.+$/m);
+test("environment template documents the Ark Seedance channel", () => {
+  assert.match(localEnv, /^ARK_VIDEO_API_KEY=$/m);
   assert.match(localEnv, /^ARK_VIDEO_MODEL=doubao-seedance-2-0-260128$/m);
 });

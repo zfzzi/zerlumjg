@@ -274,17 +274,17 @@ test("agent proxy forwards microphone audio as Ark Responses input audio", () =>
   assert.match(agentProxyBlock, /audioBase64/);
 });
 
-test("local agent model configuration uses OpenAI for main, outline, and document output routes", () => {
-  const localEnv = readFileSync(new URL("../.env.local", import.meta.url), "utf8");
+test("environment template documents Agent, outline, and document routes", () => {
+  const localEnv = readFileSync(new URL("../.env.example", import.meta.url), "utf8");
 
-  assert.match(localEnv, /^OPENAI_API_KEY=.+$/m);
+  assert.match(localEnv, /^OPENAI_API_KEY=$/m);
   assert.match(localEnv, /^OPENAI_BASE_URL=https:\/\/qweapi\.com$/m);
-  assert.match(localEnv, /^OPENAI_PROMPT_API_KEY=.+$/m);
+  assert.match(localEnv, /^OPENAI_PROMPT_API_KEY=$/m);
   assert.match(localEnv, /^OPENAI_PROMPT_BASE_URL=https:\/\/qweapi\.com$/m);
   assert.match(localEnv, /^OPENAI_PROMPT_MODEL=gpt-5\.5$/m);
   assert.match(localEnv, /^OPENAI_AGENT_MODEL=gpt-5\.5$/m);
   assert.match(localEnv, /^OPENAI_OUTLINE_MODEL=gpt-5\.5$/m);
-  assert.match(localEnv, /^OPENAI_DOCUMENT_OUTPUT_API_KEY=.+$/m);
+  assert.match(localEnv, /^OPENAI_DOCUMENT_OUTPUT_API_KEY=$/m);
   assert.match(localEnv, /^OPENAI_DOCUMENT_OUTPUT_BASE_URL=https:\/\/qweapi\.com$/m);
   assert.match(localEnv, /^OPENAI_DOCUMENT_OUTPUT_MODEL=gpt-image-2$/m);
   assert.match(localEnv, /^ARK_AGENT_MODEL=doubao-seed-2-1-pro-260628$/m);
