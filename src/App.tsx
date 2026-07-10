@@ -30,7 +30,6 @@ import {
   FilePdf,
   FileText,
   Image as ImageIcon,
-  LinkSimple,
   MagnifyingGlassPlus,
   Microphone,
   Moon,
@@ -46,7 +45,6 @@ import {
   ThumbsDown,
   ThumbsUp,
   UploadSimple,
-  User,
   UserCircle,
   VideoCamera,
   X,
@@ -55,46 +53,22 @@ import Dock, { type DockItemData } from "./components/Dock";
 import DropdownSelect from "./components/DropdownSelect";
 import { LiquidMetalButton } from "./components/LiquidMetalButton";
 import Prism from "./components/Prism";
+import {
+  createLandscapeProject,
+  type DesignStage,
+  type LandscapeProject,
+} from "./domain/landscape";
+import {
+  readWorkspaceState,
+  writeWorkspaceState,
+  type WorkspaceSession,
+  type WorkspaceTheme,
+  type WorkspaceView,
+} from "./state/workspace";
 
 type AuthMode = "login" | "register";
-type ThemeMode = "dark" | "light";
-type OnboardingStep = "choose" | "create" | "join" | "solo" | "project";
-type MemberRole =
-  | "管理员"
-  | "项目负责人"
-  | "照明设计师"
-  | "效果图设计"
-  | "商务报价"
-  | "访客";
-type WorkspaceView =
-  | "agent"
-  | "canvas"
-  | "text";
-
-type Profile = {
-  username: string;
-  phone: string;
-  email: string;
-  role: MemberRole;
-  avatarLabel: string;
-  avatarUrl?: string;
-};
-
-type Collaboration = {
-  mode: "team" | "solo";
-  workflowName: string;
-  code: string;
-  memberCount: number;
-};
-
-type Project = {
-  id: string;
-  name: string;
-  type: string;
-  client: string;
-  stage: string;
-  updatedAt: string;
-};
+type ThemeMode = WorkspaceTheme;
+type Project = LandscapeProject;
 
 type ProjectMaterial = {
   id: string;
@@ -112,49 +86,11 @@ type ProjectMaterial = {
 type ProjectDraft = {
   name: string;
   type: string;
+  location?: string;
+  designStage?: DesignStage;
   client: string;
 };
-
-type TeamMember = {
-  id: string;
-  name: string;
-  role: MemberRole;
-  phone: string;
-  email: string;
-  avatarLabel: string;
-  avatarUrl?: string;
-  used: number;
-  total: number;
-  status: "在线" | "离线" | "待审核";
-};
-
-type Session = {
-  profile: Profile;
-  collaboration: Collaboration;
-};
-
-type Permissions = {
-  canCreateProject: boolean;
-  canEditProject: boolean;
-  canManageMembers: boolean;
-  canAllocateTokens: boolean;
-  canGenerateStrategy: boolean;
-  canGenerateImages: boolean;
-  canGenerateVideo: boolean;
-  canExportDocs: boolean;
-  canManageQuote: boolean;
-};
-
-type PersistedState = {
-  theme: ThemeMode;
-  activeView: WorkspaceView;
-  session: Session | null;
-  projects: Project[];
-  projectMaterials: Record<string, ProjectMaterial[]>;
-  activeProjectId: string;
-  members: TeamMember[];
-  currentMemberId: string;
-};
+type Session = WorkspaceSession;
 
 type NavItem = {
   id: WorkspaceView;
@@ -1018,36 +954,7 @@ const initialVisualEdges: VisualCanvasEdge[] = [
   },
 ];
 
-const STORAGE_KEY = "zerlum-mvp-workspace";
 const MAX_AVATAR_IMAGE_SIZE = 256;
-const memberRoles: MemberRole[] = [
-  "管理员",
-  "照明设计师",
-  "效果图设计",
-  "访客",
-];
-const memberRoleOptions = memberRoles.map((role) => ({
-  value: role,
-  label: role,
-}));
-
-const roleDescriptions: Record<MemberRole, string> = {
-  管理员: "创建和编辑项目、生成效果图、视频和方案交付物。",
-  项目负责人: "推动方案生成和内容审批。",
-  照明设计师: "使用 AI 无限画布和文本制作完成效果图、视频和方案生成。",
-  效果图设计: "使用画布和视频模块，查看项目资料。",
-  商务报价: "查看项目资料并导出方案交付内容。",
-  访客: "只读查看项目内容，不能生成或修改核心资产。",
-};
-
-const alphabet =
-  "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-
-function generateCode() {
-  return Array.from({ length: 10 }, () =>
-    alphabet[Math.floor(Math.random() * alphabet.length)],
-  ).join("");
-}
 
 function createId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 9)}`;
@@ -1297,225 +1204,16 @@ function getTimeOfDayGreeting(date = new Date()) {
 }
 
 function createProject(draft: ProjectDraft): Project {
-  return {
-    id: createId("project"),
-    name: draft.name || "未命名照明项目",
-    type: draft.type || "照明设计",
-    client: draft.client || "未填写客户",
-    stage: "资料上传",
-    updatedAt: new Date().toISOString().slice(0, 10),
-  };
-}
-
-function buildMembers(profile: Profile, mode: Collaboration["mode"]): TeamMember[] {
-  const admin: TeamMember = {
-    id: "member-admin",
-    name: profile.username || "未命名成员",
-    role: profile.role,
-    phone: profile.phone,
-    email: profile.email,
-    avatarLabel: profile.avatarLabel,
-    avatarUrl: profile.avatarUrl,
-    used: 0,
-    total: mode === "solo" ? 22000 : 32000,
-    status: "在线",
-  };
-
-  if (mode === "solo") {
-    return [{ ...admin, role: "管理员" }];
-  }
-
-  return [admin];
-}
-
-function getPermissions(role: MemberRole): Permissions {
-  return {
-    canCreateProject: role === "管理员",
-    canEditProject: role === "管理员",
-    canManageMembers: role === "管理员",
-    canAllocateTokens: role === "管理员",
-    canGenerateStrategy:
-      role === "管理员" ||
-      role === "项目负责人" ||
-      role === "照明设计师",
-    canGenerateImages:
-      role === "管理员" ||
-      role === "项目负责人" ||
-      role === "照明设计师" ||
-      role === "效果图设计",
-    canGenerateVideo:
-      role === "管理员" ||
-      role === "项目负责人" ||
-      role === "效果图设计",
-    canExportDocs:
-      role === "管理员" ||
-      role === "项目负责人" ||
-      role === "照明设计师",
-    canManageQuote:
-      role === "管理员" ||
-      role === "项目负责人" ||
-      role === "商务报价",
-  };
-}
-
-const seedProjectNameFragments = [
-  "滨水商业综合体夜景方案",
-  "商业综合体夜景方案",
-  "北岸城市更新街区照明",
-  "城市更新街区照明",
-  "青澜酒店庭院灯光",
-  "酒店庭院灯光",
-];
-
-const seedMemberIds = new Set([
-  "member-lighting",
-  "member-render",
-  "member-quote",
-]);
-
-const seedMemberNames = new Set([
-  "林予安",
-  "周若衡",
-  "陈澈",
-  "许知微",
-  "沈听澜",
-]);
-
-function containsSeedProjectText(...values: string[]) {
-  const label = values.join(" ");
-
-  return seedProjectNameFragments.some((fragment) => label.includes(fragment));
-}
-
-function createBlankWorkspaceProject(): Project {
-  return {
-    id: "project-empty-workspace",
-    name: "未命名照明项目",
-    type: "照明设计",
-    client: "未填写客户",
-    stage: "资料上传",
-    updatedAt: new Date().toISOString().slice(0, 10),
-  };
-}
-
-function removeSeedMembers(members: TeamMember[] = []) {
-  return members
-    .filter(
-      (member) =>
-        !seedMemberIds.has(member.id) &&
-        !(seedMemberNames.has(member.name) && member.id !== "member-admin"),
-    )
-    .map((member) =>
-      seedMemberNames.has(member.name)
-        ? {
-            ...member,
-            name: "未命名成员",
-            role: "管理员" as MemberRole,
-            phone: "",
-            email: "",
-            avatarLabel: "未选择头像",
-            avatarUrl: undefined,
-            used: 0,
-            total: 32000,
-            status: "在线" as const,
-          }
-        : member,
-    );
-}
-
-function sanitizePersistedSession(session: Session | null | undefined) {
-  if (!session) {
-    return null;
-  }
-
-  const seededProfileName = seedMemberNames.has(session.profile.username);
-  const seededWorkflowName = containsSeedProjectText(
-    session.collaboration.workflowName,
-  );
+  const project = createLandscapeProject();
 
   return {
-    ...session,
-    profile: {
-      ...session.profile,
-      username: seededProfileName ? "Zerlum 用户" : session.profile.username,
-      phone: seededProfileName ? "" : session.profile.phone,
-      email: seededProfileName ? "" : session.profile.email,
-      role: seededProfileName ? "管理员" : session.profile.role,
-      avatarLabel: seededProfileName
-        ? "未选择头像"
-        : session.profile.avatarLabel,
-      avatarUrl: seededProfileName ? undefined : session.profile.avatarUrl,
-    },
-    collaboration: {
-      ...session.collaboration,
-      workflowName: seededWorkflowName
-        ? "Zerlum 工具台"
-        : session.collaboration.workflowName,
-    },
-  } satisfies Session;
-}
-
-function normalizePersistedState(
-  state: Partial<PersistedState>,
-): Partial<PersistedState> {
-  const session = sanitizePersistedSession(state.session);
-  const cleanProjects = (state.projects ?? []).filter(
-    (project) =>
-      !containsSeedProjectText(project.name, project.type, project.client),
-  );
-  const projects =
-    session && cleanProjects.length === 0
-      ? [createBlankWorkspaceProject()]
-      : cleanProjects;
-  const projectIds = new Set(projects.map((project) => project.id));
-  const projectMaterials = Object.fromEntries(
-    Object.entries(state.projectMaterials ?? {}).filter(([projectId]) =>
-      projectIds.has(projectId),
-    ),
-  );
-  let members = removeSeedMembers(state.members ?? []);
-
-  if (session && members.length === 0) {
-    members = buildMembers(session.profile, session.collaboration.mode);
-  }
-
-  const memberIds = new Set(members.map((member) => member.id));
-
-  return {
-    ...state,
-    activeView:
-      state.activeView && navItems.some((item) => item.id === state.activeView)
-        ? state.activeView
-        : state.activeView === ("video" as WorkspaceView)
-          ? "canvas"
-          : undefined,
-    session: session
-      ? {
-          ...session,
-          collaboration: {
-            ...session.collaboration,
-            memberCount: members.length,
-          },
-        }
-      : null,
-    projects,
-    projectMaterials,
-    activeProjectId: projectIds.has(state.activeProjectId ?? "")
-      ? (state.activeProjectId ?? "")
-      : (projects[0]?.id ?? ""),
-    members,
-    currentMemberId: memberIds.has(state.currentMemberId ?? "")
-      ? (state.currentMemberId ?? "")
-      : (members[0]?.id ?? ""),
+    ...project,
+    name: draft.name.trim() || project.name,
+    type: draft.type.trim() || project.type,
+    location: draft.location?.trim() || project.location,
+    designStage: draft.designStage || project.designStage,
+    client: draft.client.trim(),
   };
-}
-
-function persistWorkspaceState(state: PersistedState) {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch (error) {
-    console.warn("工作区状态保存失败，界面会继续保持当前编辑内容。", error);
-  }
 }
 
 function readFileAsDataUrl(file: File) {
@@ -1775,90 +1473,28 @@ async function readAvatarFileAsDataUrl(file: File) {
   }
 }
 
-function readPersistedState(): Partial<PersistedState> {
-  if (typeof window === "undefined") {
-    return {};
-  }
-
-  try {
-    if (new URLSearchParams(window.location.search).has("welcome")) {
-      window.localStorage.removeItem(STORAGE_KEY);
-      window.history.replaceState({}, "", window.location.pathname);
-      return {};
-    }
-
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw
-      ? normalizePersistedState(JSON.parse(raw) as Partial<PersistedState>)
-      : {};
-  } catch {
-    return {};
-  }
-}
-
 function App() {
-  const [persisted] = useState(readPersistedState);
-  const [theme, setTheme] = useState<ThemeMode>(persisted.theme ?? "dark");
+  const [persisted] = useState(readWorkspaceState);
+  const [theme, setTheme] = useState<ThemeMode>(persisted.theme);
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>("login");
-  const [onboardingOpen, setOnboardingOpen] = useState(false);
-  const [onboardingStep, setOnboardingStep] =
-    useState<OnboardingStep>("choose");
   const [activeView, setActiveView] = useState<WorkspaceView>(
-    persisted.activeView ?? "agent",
+    persisted.activeView,
   );
   const [session, setSession] = useState<Session | null>(
-    persisted.session ?? null,
+    persisted.session,
   );
-  const [projects, setProjects] = useState<Project[]>(
-    persisted.projects ?? [],
-  );
+  const [projects, setProjects] = useState<Project[]>(persisted.projects);
   const [projectMaterials, setProjectMaterials] = useState<
     Record<string, ProjectMaterial[]>
-  >(persisted.projectMaterials ?? {});
-  const [activeProjectId, setActiveProjectId] = useState(
-    persisted.activeProjectId ?? "",
-  );
-  const [members, setMembers] = useState<TeamMember[]>(
-    removeSeedMembers(persisted.members ?? []),
-  );
-  const [currentMemberId, setCurrentMemberId] = useState(
-    removeSeedMembers(persisted.members ?? []).some(
-      (member) => member.id === persisted.currentMemberId,
-    )
-      ? persisted.currentMemberId ?? ""
-      : removeSeedMembers(persisted.members ?? [])[0]?.id ?? "",
-  );
-  const [generatedCode, setGeneratedCode] = useState(generateCode);
+  >({});
+  const [activeProjectId, setActiveProjectId] = useState(persisted.activeProjectId);
+  const [persistenceMessage, setPersistenceMessage] = useState("");
   const [authForm, setAuthForm] = useState({
     username: "",
     phone: "",
     email: "",
     password: "",
-  });
-  const [profileDraft, setProfileDraft] = useState<Profile>({
-    username: "",
-    phone: "",
-    email: "",
-    role: "管理员",
-    avatarLabel: "未选择头像",
-  });
-  const [joinDraft, setJoinDraft] = useState({
-    code: "",
-    username: "",
-    role: "照明设计师" as MemberRole,
-    avatarLabel: "未选择头像",
-    avatarUrl: "",
-  });
-  const [workflowDraft, setWorkflowDraft] = useState({
-    workflowName: "",
-    projectType: "",
-    client: "",
-  });
-  const [projectDraft, setProjectDraft] = useState<ProjectDraft>({
-    name: "",
-    type: "",
-    client: "",
   });
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [newProjectDraft, setNewProjectDraft] = useState<ProjectDraft>({
@@ -1877,144 +1513,51 @@ function App() {
   const [agentMessages, setAgentMessages] = useState<AgentChatMessage[]>([]);
   const [agentStatus, setAgentStatus] = useState<AgentStreamStatus>("idle");
 
-  const currentNav = useMemo(
-    () => navItems.find((item) => item.id === activeView) ?? navItems[0],
-    [activeView],
-  );
   const activeProject =
     projects.find((project) => project.id === activeProjectId) ?? projects[0];
 
-  const currentMember =
-    members.find((member) => member.id === currentMemberId) ?? members[0];
-  const permissions = getPermissions(currentMember?.role ?? "访客");
-
   useEffect(() => {
-    if (!session || !activeProject || !currentMember) {
+    if (!activeProject) {
       return;
     }
 
-    persistWorkspaceState({
+    const result = writeWorkspaceState({
       theme,
       activeView,
       session,
       projects,
-      projectMaterials: stripProjectMaterialSourcesForPersistence(projectMaterials),
       activeProjectId: activeProject.id,
-      members,
-      currentMemberId: currentMember.id,
     });
+    setPersistenceMessage(result.ok ? "" : result.message);
   }, [
     activeProject,
     activeProjectId,
     activeView,
-    currentMember,
-    currentMemberId,
-    members,
     projects,
-    projectMaterials,
     session,
     theme,
   ]);
 
   function handleAuthSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setProfileDraft((current) => ({
-      ...current,
-      username: authForm.username || current.username,
-      phone: authForm.phone || current.phone,
-      email: authForm.email || current.email,
-    }));
-    setAuthOpen(false);
-    setOnboardingOpen(true);
-    setOnboardingStep("choose");
-  }
-
-  function beginCreateFlow() {
-    setGeneratedCode(generateCode());
-    setProfileDraft((current) => ({ ...current, role: "管理员" }));
-    setOnboardingStep("create");
-  }
-
-  function finishCreateFlow(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setOnboardingStep("project");
-  }
-
-  function finishJoinFlow(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const code = joinDraft.code || "AaBbCcDdEe";
-    setProfileDraft((current) => ({
-      ...current,
-      username: joinDraft.username || current.username,
-      role: joinDraft.role || "照明设计师",
-      avatarLabel: joinDraft.avatarLabel,
-      avatarUrl: joinDraft.avatarUrl,
-    }));
-    setWorkflowDraft((current) => ({
-      ...current,
-      workflowName: `已打开项目空间 ${code}`,
-    }));
-    setGeneratedCode(code);
-    setOnboardingStep("project");
-  }
-
-  function finishSoloFlow(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setWorkflowDraft({
-      workflowName: "个人创作空间",
-      projectType: "独立项目",
-      client: "个人项目",
-    });
-    setProfileDraft((current) => ({ ...current, role: "管理员" }));
-    setGeneratedCode("SoloMode01");
-    setOnboardingStep("project");
-  }
-
-  function finishProjectFlow(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const collaborationMode =
-      workflowDraft.workflowName === "个人创作空间" ? "solo" : "team";
-    const profile: Profile = {
-      username: profileDraft.username || joinDraft.username || "Zerlum 用户",
-      phone: profileDraft.phone,
-      email: profileDraft.email,
-      role: profileDraft.role || joinDraft.role || "管理员",
-      avatarLabel: profileDraft.avatarLabel,
-    };
-    const nextProject = createProject({
-      name: projectDraft.name,
-      type: projectDraft.type || workflowDraft.projectType,
-      client: projectDraft.client || workflowDraft.client,
-    });
-    const nextMembers = buildMembers(profile, collaborationMode);
-
+    const email = authForm.email.trim();
+    const displayName =
+      authForm.username.trim() || email.split("@")[0] || "Zerlum 用户";
     setSession({
-      profile,
-      collaboration: {
-        mode: collaborationMode,
-        workflowName: workflowDraft.workflowName,
-        code: generatedCode,
-        memberCount: nextMembers.length,
-      },
+      displayName,
+      email,
     });
-    setProjects([nextProject]);
-    setProjectMaterials((current) => ({
-      ...current,
-      [nextProject.id]: current[nextProject.id] ?? [],
-    }));
-    setActiveProjectId(nextProject.id);
-    setMembers(nextMembers);
-    setCurrentMemberId(nextMembers[0].id);
-    setOnboardingOpen(false);
+    if (projects.length === 0) {
+      const project = createLandscapeProject();
+      setProjects([project]);
+      setActiveProjectId(project.id);
+    }
     setActiveView("agent");
+    setAuthOpen(false);
   }
 
   function handleCreateProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!permissions.canCreateProject) {
-      return;
-    }
-
     const nextProject = createProject(newProjectDraft);
     setProjects((current) => [nextProject, ...current]);
     setProjectMaterials((current) => ({
@@ -2031,13 +1574,15 @@ function App() {
   }
 
   function openProjectEdit() {
-    if (!activeProject || !permissions.canEditProject) {
+    if (!activeProject) {
       return;
     }
 
     setProjectEditDraft({
       name: activeProject.name,
       type: activeProject.type,
+      location: activeProject.location,
+      designStage: activeProject.designStage,
       client: activeProject.client,
     });
     setProjectEditOpen(true);
@@ -2046,14 +1591,16 @@ function App() {
   function handleUpdateProject(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!activeProject || !permissions.canEditProject) {
+    if (!activeProject) {
       return;
     }
 
     const updatedProject = {
-      name: projectEditDraft.name.trim() || "未命名照明项目",
-      type: projectEditDraft.type.trim() || "照明设计",
-      client: projectEditDraft.client.trim() || "未填写客户",
+      name: projectEditDraft.name.trim() || "未命名景观项目",
+      type: projectEditDraft.type.trim() || "其他",
+      location: projectEditDraft.location?.trim() || "",
+      designStage: projectEditDraft.designStage || "概念方案",
+      client: projectEditDraft.client.trim(),
       updatedAt: new Date().toISOString().slice(0, 10),
     };
 
@@ -2072,32 +1619,13 @@ function App() {
     avatarLabel: string;
     avatarUrl?: string;
   }) {
-    const nextName = profile.name.trim() || "未命名成员";
-    const nextAvatar = profile.avatarLabel || "未选择头像";
-    const nextAvatarUrl = profile.avatarUrl;
-
-    setMembers((current) =>
-      current.map((member) =>
-        member.id === currentMemberId
-          ? {
-              ...member,
-              name: nextName,
-              avatarLabel: nextAvatar,
-              avatarUrl: nextAvatarUrl,
-            }
-          : member,
-      ),
-    );
+    const nextName = profile.name.trim() || "Zerlum 用户";
     setSession((current) =>
       current
         ? {
             ...current,
-            profile: {
-              ...current.profile,
-              username: nextName,
-              avatarLabel: nextAvatar,
-              avatarUrl: nextAvatarUrl,
-            },
+            displayName: nextName,
+            avatarUrl: profile.avatarUrl,
           }
         : current,
     );
@@ -2356,17 +1884,15 @@ function App() {
   }
 
   const appClass = `app-shell ${theme === "dark" ? "theme-dark" : "theme-light"}`;
-  const shouldShowWelcome = !session || !activeProject || !currentMember;
+  const shouldShowWelcome = !session || !activeProject;
 
   return (
     <main className={appClass}>
       {shouldShowWelcome ? (
         <WelcomeScreen
-          actionLabel={
-            session && activeProject && currentMember ? "进入工作区" : "Log in"
-          }
+          actionLabel="进入 Zerlum"
           onOpenLogin={() => {
-            if (session && activeProject && currentMember) {
+            if (session && activeProject) {
               return;
             }
 
@@ -2377,15 +1903,12 @@ function App() {
       ) : (
         <Workspace
           activeView={activeView}
-          currentNav={currentNav}
           session={session}
           project={activeProject}
           projects={projects}
           projectMaterials={projectMaterials[activeProject.id] ?? []}
-          members={members}
-          currentMember={currentMember}
-          permissions={permissions}
           theme={theme}
+          persistenceMessage={persistenceMessage}
           chatInput={chatInput}
           agentMessages={agentMessages}
           agentStatus={agentStatus}
@@ -2397,7 +1920,6 @@ function App() {
           onProjectMaterialDelete={handleProjectMaterialDelete}
           onOpenProjectEdit={openProjectEdit}
           onOpenNewProject={() => setNewProjectOpen(true)}
-          onCurrentMemberChange={setCurrentMemberId}
           onThemeToggle={() =>
             setTheme((current) => (current === "dark" ? "light" : "dark"))
           }
@@ -2416,32 +1938,6 @@ function App() {
           onFormChange={setAuthForm}
           onClose={() => setAuthOpen(false)}
           onSubmit={handleAuthSubmit}
-        />
-      )}
-
-      {onboardingOpen && (
-        <OnboardingDialog
-          step={onboardingStep}
-          code={generatedCode}
-          workflowDraft={workflowDraft}
-          profileDraft={profileDraft}
-          joinDraft={joinDraft}
-          projectDraft={projectDraft}
-          onClose={() => setOnboardingOpen(false)}
-          onChooseCreate={beginCreateFlow}
-          onChooseJoin={() => setOnboardingStep("join")}
-          onChooseSolo={() => {
-            setProfileDraft((current) => ({ ...current, role: "管理员" }));
-            setOnboardingStep("solo");
-          }}
-          onWorkflowChange={setWorkflowDraft}
-          onProfileChange={setProfileDraft}
-          onJoinChange={setJoinDraft}
-          onProjectChange={setProjectDraft}
-          onCreateSubmit={finishCreateFlow}
-          onJoinSubmit={finishJoinFlow}
-          onSoloSubmit={finishSoloFlow}
-          onProjectSubmit={finishProjectFlow}
         />
       )}
 
@@ -2509,9 +2005,8 @@ function App() {
         </ModalFrame>
       )}
 
-      {profileOpen && currentMember && session && (
+      {profileOpen && session && (
         <UserProfileDialog
-          member={currentMember}
           session={session}
           onProfileUpdate={handleCurrentProfileUpdate}
           onClose={() => setProfileOpen(false)}
@@ -2600,7 +2095,7 @@ function AuthDialog({
         <img src="/brand/zerlum-logo-mark.png" alt="Zerlum" />
         <div>
           <h3>Welcome Zerlum</h3>
-          <p>登录或注册后进入照明设计工具台。</p>
+          <p>登录或注册后进入景观设计工作台。</p>
         </div>
       </div>
       <div className="segmented-control" role="tablist" aria-label="登录方式">
@@ -2661,266 +2156,11 @@ function AuthDialog({
   );
 }
 
-function OnboardingDialog({
-  step,
-  code,
-  workflowDraft,
-  profileDraft,
-  joinDraft,
-  projectDraft,
-  onClose,
-  onChooseCreate,
-  onChooseJoin,
-  onChooseSolo,
-  onWorkflowChange,
-  onProfileChange,
-  onJoinChange,
-  onProjectChange,
-  onCreateSubmit,
-  onJoinSubmit,
-  onSoloSubmit,
-  onProjectSubmit,
-}: {
-  step: OnboardingStep;
-  code: string;
-  workflowDraft: { workflowName: string; projectType: string; client: string };
-  profileDraft: Profile;
-  joinDraft: {
-    code: string;
-    username: string;
-    role: MemberRole;
-    avatarLabel: string;
-    avatarUrl: string;
-  };
-  projectDraft: ProjectDraft;
-  onClose: () => void;
-  onChooseCreate: () => void;
-  onChooseJoin: () => void;
-  onChooseSolo: () => void;
-  onWorkflowChange: (draft: {
-    workflowName: string;
-    projectType: string;
-    client: string;
-  }) => void;
-  onProfileChange: (draft: Profile) => void;
-  onJoinChange: (draft: {
-    code: string;
-    username: string;
-    role: MemberRole;
-    avatarLabel: string;
-    avatarUrl: string;
-  }) => void;
-  onProjectChange: (draft: ProjectDraft) => void;
-  onCreateSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onJoinSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onSoloSubmit: (event: FormEvent<HTMLFormElement>) => void;
-  onProjectSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  const titles: Record<OnboardingStep, string> = {
-    choose: "选择创作方式",
-    create: "创建项目空间",
-    join: "打开项目空间",
-    solo: "独自创作",
-    project: "新建项目",
-  };
-
-  return (
-    <ModalFrame title={titles[step]} onClose={onClose} wide>
-      {step === "choose" && (
-        <div className="choice-grid">
-          <ChoiceButton
-            icon={PlusCircle}
-            title="创建项目空间"
-            text="创建照明设计项目资料，进入效果图、视频和方案生成工具。"
-            onClick={onChooseCreate}
-          />
-          <ChoiceButton
-            icon={LinkSimple}
-            title="打开项目空间"
-            text="输入 10 位项目码，打开已有项目资料和生成记录。"
-            onClick={onChooseJoin}
-          />
-          <ChoiceButton
-            icon={User}
-            title="独自创作"
-            text="为个人设计师开启完整照明设计工具台。"
-            onClick={onChooseSolo}
-          />
-        </div>
-      )}
-
-      {step === "create" && (
-        <form className="form-grid" onSubmit={onCreateSubmit}>
-          <section className="form-panel">
-            <h3>项目空间信息</h3>
-            <LabelledInput
-              label="项目空间名称"
-              value={workflowDraft.workflowName}
-              onChange={(workflowName) =>
-                onWorkflowChange({ ...workflowDraft, workflowName })
-              }
-            />
-            <LabelledInput
-              label="项目类型"
-              value={workflowDraft.projectType}
-              onChange={(projectType) =>
-                onWorkflowChange({ ...workflowDraft, projectType })
-              }
-            />
-            <LabelledInput
-              label="客户或组织"
-              value={workflowDraft.client}
-              onChange={(client) =>
-                onWorkflowChange({ ...workflowDraft, client })
-              }
-            />
-            <div className="code-box">
-              <span>项目码</span>
-              <strong>{code}</strong>
-            </div>
-          </section>
-          <section className="form-panel">
-            <h3>管理员资料</h3>
-            <AvatarPicker
-              value={profileDraft.avatarLabel}
-              imageUrl={profileDraft.avatarUrl}
-              onChange={(avatarLabel, avatarUrl) =>
-                onProfileChange({ ...profileDraft, avatarLabel, avatarUrl })
-              }
-            />
-            <LabelledInput
-              label="用户名"
-              value={profileDraft.username}
-              onChange={(username) =>
-                onProfileChange({ ...profileDraft, username })
-              }
-            />
-            <LabelledInput
-              label="岗位"
-              value={profileDraft.role}
-              onChange={(role) =>
-                onProfileChange({ ...profileDraft, role: role as MemberRole })
-              }
-            />
-            <button className="primary-button full" type="submit">
-              <CheckCircle size={18} weight="bold" />
-              创建并继续
-            </button>
-          </section>
-        </form>
-      )}
-
-      {step === "join" && (
-        <form className="form-grid" onSubmit={onJoinSubmit}>
-          <section className="form-panel">
-            <h3>输入项目码</h3>
-            <LabelledInput
-              label="10 位英文大小写字母"
-              value={joinDraft.code}
-              onChange={(joinCode) =>
-                onJoinChange({ ...joinDraft, code: joinCode })
-              }
-              maxLength={10}
-            />
-            <p className="fine-print">
-              原型中任意 10 位项目码都可继续。正式版会校验有效期和项目权限。
-            </p>
-          </section>
-          <section className="form-panel">
-            <h3>个人资料</h3>
-            <AvatarPicker
-              value={joinDraft.avatarLabel}
-              imageUrl={joinDraft.avatarUrl}
-              onChange={(avatarLabel, avatarUrl) =>
-                onJoinChange({ ...joinDraft, avatarLabel, avatarUrl: avatarUrl ?? "" })
-              }
-            />
-            <LabelledInput
-              label="用户名"
-              value={joinDraft.username}
-              onChange={(username) =>
-                onJoinChange({ ...joinDraft, username })
-              }
-            />
-            <LabelledInput
-              label="岗位"
-              value={joinDraft.role}
-              onChange={(role) =>
-                onJoinChange({ ...joinDraft, role: role as MemberRole })
-              }
-            />
-            <button className="primary-button full" type="submit">
-              <LinkSimple size={18} weight="bold" />
-              加入并继续
-            </button>
-          </section>
-        </form>
-      )}
-
-      {step === "solo" && (
-        <form className="form-stack" onSubmit={onSoloSubmit}>
-          <AvatarPicker
-            value={profileDraft.avatarLabel}
-            imageUrl={profileDraft.avatarUrl}
-            onChange={(avatarLabel, avatarUrl) =>
-              onProfileChange({ ...profileDraft, avatarLabel, avatarUrl })
-            }
-          />
-          <LabelledInput
-            label="用户名"
-            value={profileDraft.username}
-            onChange={(username) =>
-              onProfileChange({ ...profileDraft, username })
-            }
-          />
-          <LabelledInput
-            label="岗位"
-            value={profileDraft.role}
-            onChange={(role) =>
-              onProfileChange({ ...profileDraft, role: role as MemberRole })
-            }
-          />
-          <button className="primary-button full" type="submit">
-            <User size={18} weight="bold" />
-            进入个人项目
-          </button>
-        </form>
-      )}
-
-      {step === "project" && (
-        <form className="form-stack" onSubmit={onProjectSubmit}>
-          <LabelledInput
-            label="项目名称"
-            value={projectDraft.name}
-            onChange={(name) => onProjectChange({ ...projectDraft, name })}
-          />
-          <LabelledInput
-            label="项目类型"
-            value={projectDraft.type}
-            onChange={(type) => onProjectChange({ ...projectDraft, type })}
-          />
-          <LabelledInput
-            label="客户或备注"
-            value={projectDraft.client}
-            onChange={(client) => onProjectChange({ ...projectDraft, client })}
-          />
-          <button className="primary-button full" type="submit">
-            <Sparkle size={18} weight="bold" />
-            进入 zerlum agent
-          </button>
-        </form>
-      )}
-    </ModalFrame>
-  );
-}
-
 function UserProfileDialog({
-  member,
   session,
   onProfileUpdate,
   onClose,
 }: {
-  member: TeamMember;
   session: Session;
   onProfileUpdate: (profile: {
     name: string;
@@ -2932,14 +2172,10 @@ function UserProfileDialog({
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [isEditingName, setIsEditingName] = useState(false);
   const [profileDetailDraft, setProfileDetailDraft] = useState({
-    name: member.name,
-    avatarLabel:
-      member.avatarLabel || session.profile.avatarLabel || "未选择头像",
-    avatarUrl: member.avatarUrl || session.profile.avatarUrl,
+    name: session.displayName,
+    avatarLabel: "账户头像",
+    avatarUrl: session.avatarUrl,
   });
-  const remaining = Math.max(0, member.total - member.used);
-  const usagePercent =
-    member.total > 0 ? Math.round((member.used / member.total) * 100) : 0;
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3010,7 +2246,7 @@ function UserProfileDialog({
                   }
                 />
               ) : (
-                <h3>{profileDetailDraft.name.trim() || "未命名成员"}</h3>
+                <h3>{profileDetailDraft.name.trim() || "Zerlum 用户"}</h3>
               )}
               <button
                 className="profile-name-edit"
@@ -3020,42 +2256,19 @@ function UserProfileDialog({
                 {isEditingName ? "完成" : "编辑名称"}
               </button>
             </div>
-            <p>
-              {member.role} · {member.status}
-            </p>
+            <p>个人景观设计工作台</p>
           </div>
         </div>
 
         <div className="profile-detail-grid">
           <div>
             <span>邮箱</span>
-            <strong>{member.email || session.profile.email || "未填写"}</strong>
+            <strong>{session.email || "未填写"}</strong>
           </div>
           <div>
-            <span>手机号</span>
-            <strong>{member.phone || session.profile.phone || "未填写"}</strong>
+            <span>会话方式</span>
+            <strong>本地单人会话</strong>
           </div>
-          <div>
-            <span>当前空间</span>
-            <strong>{session.collaboration.workflowName}</strong>
-          </div>
-          <div>
-            <span>项目码</span>
-            <strong>{session.collaboration.code}</strong>
-          </div>
-        </div>
-
-        <div className="profile-token-card">
-          <div>
-            <span>Token 使用量</span>
-            <strong>
-              {member.used.toLocaleString()} / {member.total.toLocaleString()}
-            </strong>
-          </div>
-          <meter value={member.used} max={member.total} />
-          <small>
-            已用 {usagePercent}% · 剩余 {remaining.toLocaleString()} token
-          </small>
         </div>
 
         <button className="primary-button full" type="submit">
@@ -3069,15 +2282,12 @@ function UserProfileDialog({
 
 function Workspace({
   activeView,
-  currentNav,
   session,
   project,
   projects,
   projectMaterials,
-  members,
-  currentMember,
-  permissions,
   theme,
+  persistenceMessage,
   chatInput,
   agentMessages,
   agentStatus,
@@ -3087,7 +2297,6 @@ function Workspace({
   onProjectMaterialDelete,
   onOpenProjectEdit,
   onOpenNewProject,
-  onCurrentMemberChange,
   onThemeToggle,
   onOpenProfile,
   onChatInput,
@@ -3095,15 +2304,12 @@ function Workspace({
   handleAgentVoiceSubmit,
 }: {
   activeView: WorkspaceView;
-  currentNav: NavItem;
   session: Session;
   project: Project;
   projects: Project[];
   projectMaterials: ProjectMaterial[];
-  members: TeamMember[];
-  currentMember: TeamMember;
-  permissions: Permissions;
   theme: ThemeMode;
+  persistenceMessage: string;
   chatInput: string;
   agentMessages: AgentChatMessage[];
   agentStatus: AgentStreamStatus;
@@ -3113,7 +2319,6 @@ function Workspace({
   onProjectMaterialDelete: (materialId: string) => void;
   onOpenProjectEdit: () => void;
   onOpenNewProject: () => void;
-  onCurrentMemberChange: (memberId: string) => void;
   onThemeToggle: () => void;
   onOpenProfile: () => void;
   onChatInput: (value: string) => void;
@@ -3170,19 +2375,24 @@ function Workspace({
         <div className="profile-tools">
           <ThemeToggle theme={theme} onToggle={onThemeToggle} />
           <button className="profile-button" type="button" onClick={onOpenProfile}>
-            {currentMember.avatarUrl ? (
+            {session.avatarUrl ? (
               <img
                 className="profile-button-avatar"
-                src={currentMember.avatarUrl}
+                src={session.avatarUrl}
                 alt=""
               />
             ) : (
               <UserCircle size={22} weight="bold" />
             )}
-            <span>{currentMember.name}</span>
+            <span>{session.displayName}</span>
           </button>
         </div>
       </header>
+      {persistenceMessage && (
+        <div className="workspace-persistence-status" role="status">
+          {persistenceMessage}
+        </div>
+      )}
 
       <section
         className={`workspace-body ${
@@ -3210,31 +2420,25 @@ function Workspace({
                     }))}
                   />
                 </div>
-                {permissions.canEditProject && (
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={onOpenProjectEdit}
-                  >
-                    <ClipboardText size={17} weight="bold" />
-                    编辑项目
-                  </button>
-                )}
-                {permissions.canCreateProject && (
-                  <button
-                    className="secondary-button"
-                    type="button"
-                    onClick={onOpenNewProject}
-                  >
-                    <PlusCircle size={17} weight="bold" />
-                    新项目
-                  </button>
-                )}
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={onOpenProjectEdit}
+                >
+                  <ClipboardText size={17} weight="bold" />
+                  编辑项目
+                </button>
+                <button
+                  className="secondary-button"
+                  type="button"
+                  onClick={onOpenNewProject}
+                >
+                  <PlusCircle size={17} weight="bold" />
+                  新项目
+                </button>
                 <div className="project-chip">
                   <SealCheck size={17} weight="bold" />
-                  {session.collaboration.mode === "solo"
-                    ? "个人创作"
-                    : "项目空间"}
+                  {project.designStage}
                 </div>
               </div>
             )}
@@ -3245,8 +2449,8 @@ function Workspace({
           <AgentView
             project={project}
             materials={projectMaterials}
-            userName={currentMember.name}
-            userAvatarUrl={currentMember.avatarUrl}
+            userName={session.displayName}
+            userAvatarUrl={session.avatarUrl}
             chatInput={chatInput}
             agentMessages={agentMessages}
             agentStatus={agentStatus}
@@ -3264,19 +2468,17 @@ function Workspace({
           }`}
         >
           <UnifiedCanvasView
-            permissions={permissions}
             onGeneratedImagesChange={setCanvasGeneratedImages}
           />
         </div>
         {activeView === "text" && (
           <TextView
-            permissions={permissions}
             project={project}
             materials={projectMaterials}
             agentMessages={agentMessages}
             onUploadMaterials={onProjectMaterialsUpload}
-            userName={currentMember.name}
-            userAvatarUrl={currentMember.avatarUrl}
+            userName={session.displayName}
+            userAvatarUrl={session.avatarUrl}
             documentInput={documentInput}
             documentMessages={documentMessages}
             outline={documentOutline}
@@ -4113,7 +3315,6 @@ function AgentComposer({
 }
 
 function CanvasView({
-  permissions,
   userName,
   userAvatarUrl,
   visualInput,
@@ -4122,7 +3323,6 @@ function CanvasView({
   onVisualMessagesChange,
   onGeneratedImagesChange,
 }: {
-  permissions: Permissions;
   userName: string;
   userAvatarUrl: string | undefined;
   visualInput: string;
@@ -4697,10 +3897,6 @@ function CanvasView({
   }
 
   async function generateVisualImage(generatedNodeId: string) {
-    if (!permissions.canGenerateImages) {
-      return;
-    }
-
     const promptNode = findUpstreamVisualNode(generatedNodeId, "prompt");
     const imageNode = findUpstreamVisualNode(generatedNodeId, "image");
     const resolutionNode = findUpstreamVisualNode(generatedNodeId, "resolution");
@@ -5145,7 +4341,7 @@ function CanvasView({
           {visualNodes.map((node) => (
             <VisualCanvasNodeCard
               active={activeVisualNodeId === node.id}
-              canGenerateImages={permissions.canGenerateImages}
+              canGenerateImages
               key={node.id}
               node={node}
               onDelete={deleteVisualNode}
@@ -5477,10 +4673,8 @@ function VisualCanvasNodeCard({
 }
 
 function UnifiedCanvasView({
-  permissions,
   onGeneratedImagesChange,
 }: {
-  permissions: Permissions;
   onGeneratedImagesChange: (images: CanvasGeneratedImage[]) => void;
 }) {
   const canvasRef = useRef<HTMLElement | null>(null);
@@ -6869,10 +6063,6 @@ function UnifiedCanvasView({
   }
 
   async function generateCanvasImage(nodeId: string) {
-    if (!permissions.canGenerateImages) {
-      return;
-    }
-
     const node = canvasNodes.find((item) => item.id === nodeId);
     const userPrompt = node?.prompt.trim() ?? "";
 
@@ -7122,10 +6312,6 @@ function UnifiedCanvasView({
   }
 
   async function generateCanvasVideo(nodeId: string) {
-    if (!permissions.canGenerateVideo) {
-      return;
-    }
-
     const node = canvasNodes.find((item) => item.id === nodeId);
     const cleanPrompt = node?.prompt.trim() ?? "";
 
@@ -7507,8 +6693,8 @@ function UnifiedCanvasView({
               active={activeCanvasNodeId === node.id}
               canGenerate={
                 node.kind === "image"
-                  ? permissions.canGenerateImages
-                  : permissions.canGenerateVideo
+                  ? true
+                  : true
               }
               connectionTarget={connectionTargetNodeId === node.id}
               isReplaceableImage={isReplaceableCanvasImageNode(node, canvasEdges)}
@@ -8604,10 +7790,8 @@ function getVideoGenerationErrorMessage(error: unknown) {
 }
 
 function VideoView({
-  permissions,
   canvasGeneratedImages,
 }: {
-  permissions: Permissions;
   canvasGeneratedImages: CanvasGeneratedImage[];
 }) {
   const [prompt, setPrompt] = useState("");
@@ -8626,10 +7810,7 @@ function VideoView({
   const [activePath, setActivePath] = useState<VideoPathPoint[] | null>(null);
   const [history, setHistory] = useState<VideoHistoryItem[]>([]);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
-  const canGenerate =
-    permissions.canGenerateVideo &&
-    prompt.trim().length > 0 &&
-    videoStatus !== "loading";
+  const canGenerate = prompt.trim().length > 0 && videoStatus !== "loading";
   const selectedHistory =
     history.find((item) => item.id === selectedHistoryId) ?? history[0] ?? null;
   const selectedCameraPreset =
@@ -8822,7 +8003,7 @@ function VideoView({
   async function handleGenerateVideo() {
     const cleanPrompt = prompt.trim();
 
-    if (!permissions.canGenerateVideo || !cleanPrompt) {
+    if (!cleanPrompt) {
       return;
     }
 
@@ -9188,7 +8369,7 @@ function VideoView({
         </div>
         <div className="video-panel-head">
           <PanelTitle icon={VideoCamera} title="视频提示词" />
-          <span>{permissions.canGenerateVideo ? "可生成" : "只读"}</span>
+          <span>可生成</span>
         </div>
         <div className="video-camera-preset-panel">
           <button
@@ -9270,13 +8451,7 @@ function VideoView({
           type="button"
           disabled={!canGenerate}
           onClick={handleGenerateVideo}
-          title={
-            !permissions.canGenerateVideo
-              ? "当前角色没有视频生成权限"
-              : canGenerate
-                ? "生成视频"
-                : "请输入视频提示词"
-          }
+          title={canGenerate ? "生成视频" : "请输入视频提示词"}
         >
           {videoStatus === "loading" ? (
             <SpinnerGap size={18} weight="bold" className="spin" />
@@ -9480,7 +8655,6 @@ function VideoView({
 }
 
 function TextView({
-  permissions,
   project,
   materials,
   agentMessages,
@@ -9503,7 +8677,6 @@ function TextView({
   setDocumentStatus,
   setOutputStatus,
 }: {
-  permissions: Permissions;
   project: Project;
   materials: ProjectMaterial[];
   agentMessages: AgentChatMessage[];
@@ -9539,7 +8712,7 @@ function TextView({
   const hasOutput =
     documentOutputPages.some((page) => page.imageUrl || page.resultText) ||
     documentOutput.trim().length > 0;
-  const canExport = permissions.canExportDocs && hasOutput;
+  const canExport = hasOutput;
   const displayUserName = userName.trim() || "用户";
   const outputAbortControllerRef = useRef<AbortController | null>(null);
   const documentUploadInputRef = useRef<HTMLInputElement | null>(null);
@@ -10239,24 +9412,14 @@ function TextView({
           <div>
             <span>导出状态</span>
             <strong>
-              {canExport
-                ? "PDF 已准备"
-                : permissions.canExportDocs
-                  ? "等待方案文本"
-                  : "无导出权限"}
+              {canExport ? "PDF 已准备" : "等待方案文本"}
             </strong>
           </div>
           <button
             className="primary-button compact"
             type="button"
             disabled={!canExport}
-            title={
-              !permissions.canExportDocs
-                ? "当前角色没有文档导出权限"
-                : canExport
-                  ? "导出 PDF"
-                  : "请先生成方案文本"
-            }
+            title={canExport ? "导出 PDF" : "请先生成方案文本"}
             onClick={handleExportDocument}
           >
             <DownloadSimple size={18} weight="bold" />
