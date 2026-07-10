@@ -2,18 +2,21 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const [app, styles] = await Promise.all([
+const [app, welcome, header, styles] = await Promise.all([
   readFile(new URL("../src/App.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/shell/WelcomeScreen.tsx", import.meta.url), "utf8"),
+  readFile(new URL("../src/shell/WorkspaceHeader.tsx", import.meta.url), "utf8"),
   readFile(new URL("../src/styles.css", import.meta.url), "utf8"),
 ]);
+const shellSource = app + welcome + header;
 
 test("welcome and workspace share the landscape product language", () => {
-  assert.match(app, /从场地到方案/);
-  assert.match(app, /理解场地，推演方向，完成表达。/);
-  assert.match(app, /景观 Agent/);
-  assert.match(app, /方案画布/);
-  assert.match(app, /文本交付/);
-  assert.doesNotMatch(app, /Welcome Zerlum|照明设计工具台/);
+  assert.match(shellSource, /从场地到方案/);
+  assert.match(shellSource, /理解场地，推演方向，完成表达。/);
+  assert.match(shellSource, /景观 Agent/);
+  assert.match(shellSource, /方案画布/);
+  assert.match(shellSource, /文本交付/);
+  assert.doesNotMatch(shellSource, /Welcome Zerlum|照明设计工具台/);
 });
 
 test("Agent empty state offers the six landscape workflow tasks", () => {

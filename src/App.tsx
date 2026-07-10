@@ -31,16 +31,13 @@ import {
   Image as ImageIcon,
   MagnifyingGlassPlus,
   Microphone,
-  Moon,
   PaperPlaneTilt,
   PlusCircle,
   Scissors,
   SealCheck,
   ShareNetwork,
-  ShieldCheck,
   Sparkle,
   SpinnerGap,
-  Sun,
   ThumbsDown,
   ThumbsUp,
   UploadSimple,
@@ -48,8 +45,11 @@ import {
   VideoCamera,
   X,
 } from "@phosphor-icons/react";
-import Dock, { type DockItemData } from "./components/Dock";
 import DropdownSelect from "./components/DropdownSelect";
+import AuthDialog, { type AuthMode } from "./shell/AuthDialog";
+import WelcomeScreen from "./shell/WelcomeScreen";
+import WorkspaceHeader from "./shell/WorkspaceHeader";
+import AgentViewLayout from "./views/agent/AgentView";
 import {
   createLandscapeProject,
   designStages,
@@ -65,7 +65,6 @@ import {
   type WorkspaceView,
 } from "./state/workspace";
 
-type AuthMode = "login" | "register";
 type ThemeMode = WorkspaceTheme;
 type Project = LandscapeProject;
 
@@ -90,18 +89,6 @@ type ProjectDraft = {
   client: string;
 };
 type Session = WorkspaceSession;
-
-type NavItem = {
-  id: WorkspaceView;
-  label: string;
-  icon: typeof ChatCircleText;
-};
-
-const navItems: NavItem[] = [
-  { id: "agent", label: "景观 Agent", icon: ChatCircleText },
-  { id: "canvas", label: "方案画布", icon: ImageIcon },
-  { id: "text", label: "文本交付", icon: FileText },
-];
 
 type AgentAttachment = {
   id: string;
@@ -2079,127 +2066,6 @@ function App() {
   );
 }
 
-function WelcomeScreen({
-  actionLabel = "Log in",
-  onOpenLogin,
-}: {
-  actionLabel?: string;
-  onOpenLogin: () => void;
-}) {
-  return (
-    <section className="welcome-screen">
-      <div className="welcome-landscape-field" aria-hidden="true" />
-      <div className="welcome-card">
-        <img
-          className="logo-mark-image"
-          src="/brand/zerlum-logo-mark.png"
-          alt="Zerlum"
-        />
-        <div className="welcome-copy">
-          <h1>从场地到方案</h1>
-          <p>理解场地，推演方向，完成表达。</p>
-        </div>
-        <button className="welcome-primary-action" type="button" onClick={onOpenLogin}>
-          {actionLabel}
-          <ArrowUp size={18} weight="bold" />
-        </button>
-      </div>
-    </section>
-  );
-}
-
-function AuthDialog({
-  authMode,
-  authForm,
-  onModeChange,
-  onFormChange,
-  onClose,
-  onSubmit,
-}: {
-  authMode: AuthMode;
-  authForm: {
-    username: string;
-    phone: string;
-    email: string;
-    password: string;
-  };
-  onModeChange: (mode: AuthMode) => void;
-  onFormChange: (form: {
-    username: string;
-    phone: string;
-    email: string;
-    password: string;
-  }) => void;
-  onClose: () => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  return (
-    <ModalFrame title="进入 Zerlum" onClose={onClose} softBackdrop>
-      <div className="auth-brand">
-        <img src="/brand/zerlum-logo-mark.png" alt="Zerlum" />
-        <div>
-          <h3>进入 Zerlum</h3>
-          <p>登录或注册后进入景观设计工作台。</p>
-        </div>
-      </div>
-      <div className="segmented-control" role="tablist" aria-label="登录方式">
-        <button
-          className={authMode === "login" ? "active" : ""}
-          onClick={() => onModeChange("login")}
-          type="button"
-        >
-          登录
-        </button>
-        <button
-          className={authMode === "register" ? "active" : ""}
-          onClick={() => onModeChange("register")}
-          type="button"
-        >
-          注册
-        </button>
-      </div>
-
-      <form className="form-stack" onSubmit={onSubmit}>
-        {authMode === "register" && (
-          <>
-            <LabelledInput
-              label="用户名"
-              value={authForm.username}
-              onChange={(username) => onFormChange({ ...authForm, username })}
-              autoComplete="username"
-            />
-            <LabelledInput
-              label="手机号"
-              value={authForm.phone}
-              onChange={(phone) => onFormChange({ ...authForm, phone })}
-              autoComplete="tel"
-            />
-          </>
-        )}
-        <LabelledInput
-          label={authMode === "login" ? "邮箱或手机号" : "邮箱号"}
-          value={authForm.email}
-          onChange={(email) => onFormChange({ ...authForm, email })}
-          autoComplete="email"
-        />
-        <LabelledInput
-          label="账户密码"
-          value={authForm.password}
-          type="password"
-          onChange={(password) => onFormChange({ ...authForm, password })}
-          autoComplete={
-            authMode === "login" ? "current-password" : "new-password"
-          }
-        />
-        <button className="primary-button full monochrome" type="submit">
-          <ShieldCheck size={18} weight="bold" />
-          {authMode === "login" ? "登录" : "注册并继续"}
-        </button>
-      </form>
-    </ModalFrame>
-  );
-}
-
 function UserProfileDialog({
   session,
   onProfileUpdate,
@@ -2374,15 +2240,6 @@ function Workspace({
     textInstruction: string,
   ) => void;
 }) {
-  const dockItems = useMemo<DockItemData[]>(
-    () =>
-      navItems.map((item) => ({
-        label: item.label,
-        onClick: () => onViewChange(item.id),
-        className: activeView === item.id ? "active" : "",
-      })),
-    [activeView, onViewChange],
-  );
   const showViewHeading = false;
   const showProjectActions = showViewHeading;
   const [visualInput, setVisualInput] = useState("");
@@ -2402,62 +2259,19 @@ function Workspace({
 
   return (
     <section className="workspace">
-      <header className="workspace-header">
-        <div className="brand-lockup" aria-label="Zerlum">
-          <img
-            className="brand-logo-image"
-            src="/brand/zerlum-logo-wide.png"
-            alt="Zerlum"
-          />
-          <div className="header-project-context">
-            <DropdownSelect
-              className="header-project-dropdown"
-              value={project.id}
-              onValueChange={onProjectChange}
-              ariaLabel="切换当前项目"
-              options={projects.map((item) => ({
-                value: item.id,
-                label: item.name,
-              }))}
-            />
-            <button type="button" onClick={onOpenProjectEdit}>
-              {project.location || project.type} / {project.designStage}
-            </button>
-          </div>
-        </div>
-        <Dock
-          items={dockItems}
-          className="workspace-dock-panel"
-          panelHeight={46}
-          baseItemSize={98}
-          magnification={132}
-          distance={150}
-        />
-        <div className="profile-tools">
-          <button
-            className="icon-button header-new-project"
-            type="button"
-            onClick={onOpenNewProject}
-            aria-label="新建景观项目"
-            title="新建景观项目"
-          >
-            <PlusCircle size={18} weight="bold" />
-          </button>
-          <ThemeToggle theme={theme} onToggle={onThemeToggle} />
-          <button className="profile-button" type="button" onClick={onOpenProfile}>
-            {session.avatarUrl ? (
-              <img
-                className="profile-button-avatar"
-                src={session.avatarUrl}
-                alt=""
-              />
-            ) : (
-              <UserCircle size={22} weight="bold" />
-            )}
-            <span>{session.displayName}</span>
-          </button>
-        </div>
-      </header>
+      <WorkspaceHeader
+        activeView={activeView}
+        session={session}
+        project={project}
+        projects={projects}
+        theme={theme}
+        onViewChange={onViewChange}
+        onProjectChange={onProjectChange}
+        onOpenProjectEdit={onOpenProjectEdit}
+        onOpenNewProject={onOpenNewProject}
+        onThemeToggle={onThemeToggle}
+        onOpenProfile={onOpenProfile}
+      />
       {persistenceMessage && (
         <div className="workspace-persistence-status" role="status">
           {persistenceMessage}
@@ -2516,7 +2330,7 @@ function Workspace({
         )}
 
         {activeView === "agent" && (
-          <AgentView
+          <AgentWorkspaceContent
             project={project}
             materials={projectMaterials}
             userName={session.displayName}
@@ -2572,38 +2386,6 @@ function Workspace({
   );
 }
 
-function ThemeToggle({
-  theme,
-  onToggle,
-  floating = false,
-}: {
-  theme: ThemeMode;
-  onToggle: () => void;
-  floating?: boolean;
-}) {
-  return (
-    <button
-      className={`theme-toggle ${theme === "light" ? "light" : "dark"} ${
-        floating ? "floating" : ""
-      }`}
-      onClick={onToggle}
-      title={theme === "dark" ? "切换浅色模式" : "切换深色模式"}
-      type="button"
-      aria-label={theme === "dark" ? "切换浅色模式" : "切换深色模式"}
-    >
-      <span className="theme-toggle-track">
-        <span className="theme-toggle-thumb">
-          {theme === "dark" ? (
-            <Moon size={15} weight="bold" />
-          ) : (
-            <Sun size={15} weight="bold" />
-          )}
-        </span>
-      </span>
-    </button>
-  );
-}
-
 function UserMessageAvatar({
   avatarUrl,
   size = 30,
@@ -2618,7 +2400,7 @@ function UserMessageAvatar({
   );
 }
 
-function AgentView({
+function AgentWorkspaceContent({
   project,
   materials,
   userName,
@@ -2728,7 +2510,7 @@ function AgentView({
   }, [agentMessages, agentStatus]);
 
   return (
-    <div className="agent-layout">
+    <AgentViewLayout>
       <aside className="context-rail">
         <div className="rail-heading">
           <div>
@@ -2973,7 +2755,7 @@ function AgentView({
           </section>
         </div>
       </aside>
-    </div>
+    </AgentViewLayout>
   );
 }
 

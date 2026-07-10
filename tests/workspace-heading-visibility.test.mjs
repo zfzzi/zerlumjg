@@ -14,6 +14,10 @@ const dockStylesSource = readFileSync(
   new URL("../src/components/Dock.css", import.meta.url),
   "utf8",
 );
+const workspaceHeaderSource = readFileSync(
+  new URL("../src/shell/WorkspaceHeader.tsx", import.meta.url),
+  "utf8",
+);
 
 test("project heading row is removed from the tool-platform workspace", () => {
   assert.match(
@@ -46,8 +50,8 @@ test("workspace dock omits the home button", () => {
   assert.doesNotMatch(appSource, /onReturnHome=\{handleReturnHome\}/);
   assert.doesNotMatch(appSource, /onReturnHome: \(\) => void;/);
   assert.match(
-    appSource,
-    /const dockItems = useMemo<DockItemData\[\]>\(\s*\(\) =>\s*navItems\.map/,
+    workspaceHeaderSource,
+    /const dockItems = useMemo<DockItemData\[\]>\(\s*\(\) =>\s*workspaceNavItems\.map/,
   );
 });
 

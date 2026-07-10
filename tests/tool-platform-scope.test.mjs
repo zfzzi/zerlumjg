@@ -6,15 +6,19 @@ import { fileURLToPath } from "node:url";
 
 const rootPath = fileURLToPath(new URL("..", import.meta.url));
 const appSource = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+const workspaceHeaderSource = readFileSync(
+  new URL("../src/shell/WorkspaceHeader.tsx", import.meta.url),
+  "utf8",
+);
 const viteSource = readFileSync(new URL("../vite.config.ts", import.meta.url), "utf8");
 const apiServerSource = readFileSync(
   new URL("../api/_zerlum-server.ts", import.meta.url),
   "utf8",
 );
 
-const navItemsBlock = appSource.slice(
-  appSource.indexOf("const navItems: NavItem[] = ["),
-  appSource.indexOf("type AgentAttachment"),
+const navItemsBlock = workspaceHeaderSource.slice(
+  workspaceHeaderSource.indexOf("export const workspaceNavItems = ["),
+  workspaceHeaderSource.indexOf("export type WorkspaceHeaderProps"),
 );
 const workspaceRenderBlock = appSource.slice(
   appSource.indexOf("function Workspace"),
@@ -43,7 +47,7 @@ test("zerlum agent is rendered while removed workspace sections stay deleted", (
     workspaceRenderBlock,
     /<FixtureView|<DatabaseView|<KnowledgeView|<QuoteView|<HubView/,
   );
-  assert.match(appSource, /function AgentView\b/);
+  assert.match(appSource, /function AgentWorkspaceContent\b/);
   assert.doesNotMatch(
     appSource,
     /function (FixtureView|DatabaseView|KnowledgeView|QuoteView|HubView)\b/,

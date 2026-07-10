@@ -5,7 +5,7 @@ import test from "node:test";
 const appSource = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
 const stylesSource = readFileSync(new URL("../src/styles.css", import.meta.url), "utf8");
 const agentViewBlock = appSource.slice(
-  appSource.indexOf("function AgentView"),
+  appSource.indexOf("function AgentWorkspaceContent"),
   appSource.indexOf("function AgentComposer"),
 );
 
