@@ -2,7 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "api/*.ts": {
-      "includeFiles": "api/zerlum-lighting-skill/**"
+      "includeFiles": "api/zerlum-landscape-skill/**"
     }
   }
 }

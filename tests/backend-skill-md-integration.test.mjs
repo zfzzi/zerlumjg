@@ -14,32 +14,27 @@ const apiImageRouteSource = apiServerSource.slice(
   apiServerSource.indexOf("export async function handleZerlumImage"),
   apiServerSource.indexOf("export async function handleZerlumVideo"),
 );
-const skillHelperPath = join(root, "api", "zerlum-skill.js");
-const skillHelperTypesPath = join(root, "api", "zerlum-skill.d.ts");
-const oldSkillMarkdownPath = join(root, "api", "zerlum-facade-lighting-skill.md");
-const skillRootPath = join(root, "api", "zerlum-lighting-skill");
+const skillHelperPath = join(root, "api", "zerlum-landscape-skill.js");
+const skillHelperTypesPath = join(root, "api", "zerlum-landscape-skill.d.ts");
+const skillRootPath = join(root, "api", "zerlum-landscape-skill");
 const expectedSkillFiles = [
   "SKILL.md",
-  "references/00-universal-design-thinking.md",
-  "references/01-domain-facade-lighting.md",
-  "references/02-domain-interior-lighting.md",
-  "references/03-domain-landscape-lighting.md",
-  "references/04-domain-cultural-tourism-night-tour.md",
-  "references/05-typology-hotel-lobby.md",
-  "references/06-output-quality-rubric.md",
-  "references/07-variation-variables.md",
+  "references/00-universal-landscape-thinking.md",
+  "references/01-site-analysis.md",
+  "references/02-spatial-program-circulation.md",
+  "references/03-users-scenarios-operations.md",
+  "references/04-grading-water-ecology.md",
+  "references/05-planting-seasonality.md",
+  "references/06-materials-details.md",
+  "references/07-project-typologies.md",
+  "references/08-visualization-prompts.md",
+  "references/09-document-delivery.md",
+  "references/10-quality-variation.md",
 ];
-const obsoleteSkillFiles = [
-  "references/architecture.md",
-  "references/interior.md",
-  "references/landscape.md",
-  "references/toolbox.md",
-];
-const vercelConfigPath = join(root, "vercel.json");
 
-test("backend uses the previous nine-file lighting design skill package", () => {
-  assert.equal(existsSync(oldSkillMarkdownPath), false);
+test("backend ships a complete landscape design skill package", () => {
   assert.equal(existsSync(skillRootPath), true);
+  assert.equal(existsSync(join(root, "api", "zerlum-lighting-skill")), false);
 
   for (const relativePath of expectedSkillFiles) {
     assert.equal(
@@ -49,152 +44,95 @@ test("backend uses the previous nine-file lighting design skill package", () => 
     );
   }
 
-  for (const relativePath of obsoleteSkillFiles) {
-    assert.equal(
-      existsSync(join(skillRootPath, relativePath)),
-      false,
-      `${relativePath} should be removed after restoring the previous nine-file skill`,
-    );
-  }
-
   const skillIndex = readFileSync(join(skillRootPath, "SKILL.md"), "utf8");
-  assert.match(skillIndex, /Zerlum Lighting Design Skill/);
-  assert.match(skillIndex, /Four Layers/);
-  assert.match(skillIndex, /references\/00-universal-design-thinking\.md/);
-  assert.match(skillIndex, /references\/02-domain-interior-lighting\.md/);
-  assert.match(skillIndex, /references\/07-variation-variables\.md/);
-
-  const universalFile = readFileSync(
-    join(skillRootPath, "references", "00-universal-design-thinking.md"),
-    "utf8",
-  );
-  assert.match(universalFile, /Universal Design Thinking/);
-  assert.match(universalFile, /Three Lighting Layers/);
-
-  const variationFile = readFileSync(
-    join(skillRootPath, "references", "07-variation-variables.md"),
-    "utf8",
-  );
-  assert.match(variationFile, /Variation Variables/);
-  assert.match(variationFile, /Differentiation Variable Pool/);
+  const allSkillMarkdown = expectedSkillFiles
+    .map((relativePath) => readFileSync(join(skillRootPath, relativePath), "utf8"))
+    .join("\n");
+  assert.match(skillIndex, /Zerlum Landscape Design Skill/);
+  assert.match(skillIndex, /用户明确要求、项目简报和场地资料优先/);
+  assert.match(allSkillMarkdown, /场地分析/);
+  assert.match(allSkillMarkdown, /空间结构/);
+  assert.match(allSkillMarkdown, /植物群落/);
+  assert.match(allSkillMarkdown, /竖向|排水/);
+  assert.doesNotMatch(allSkillMarkdown, /Lighting Skill|立面照明|酒店大堂照明/);
 });
 
-test("lighting skill markdown uses the previous English-led reference package", () => {
-  for (const relativePath of expectedSkillFiles) {
-    const markdown = readFileSync(join(skillRootPath, relativePath), "utf8");
-
-    assert.match(markdown, /Zerlum|Lighting|Purpose|Output|Design|Prompt|Use|Avoid/);
-  }
-
-  const skillIndex = readFileSync(join(skillRootPath, "SKILL.md"), "utf8");
-
-  assert.match(skillIndex, /Core Rule/);
-  assert.match(skillIndex, /Selection Discipline/);
-  assert.match(skillIndex, /Output Discipline/);
-});
-
-test("backend exposes a shared skill context helper", () => {
+test("backend exposes one shared landscape context helper", () => {
   assert.equal(existsSync(skillHelperPath), true);
   assert.equal(existsSync(skillHelperTypesPath), true);
+  assert.equal(existsSync(join(root, "api", "zerlum-skill.js")), false);
 
-  const skillHelperSource = readFileSync(skillHelperPath, "utf8");
-  const skillHelperTypes = readFileSync(skillHelperTypesPath, "utf8");
-  assert.match(skillHelperSource, /zerlum-lighting-skill\/SKILL\.md/);
-  assert.match(skillHelperSource, /references\/00-universal-design-thinking\.md/);
-  assert.match(skillHelperSource, /references\/01-domain-facade-lighting\.md/);
-  assert.match(skillHelperSource, /references\/02-domain-interior-lighting\.md/);
-  assert.match(skillHelperSource, /references\/03-domain-landscape-lighting\.md/);
-  assert.match(skillHelperSource, /references\/04-domain-cultural-tourism-night-tour\.md/);
-  assert.match(skillHelperSource, /references\/05-typology-hotel-lobby\.md/);
-  assert.match(skillHelperSource, /references\/06-output-quality-rubric\.md/);
-  assert.match(skillHelperSource, /references\/07-variation-variables\.md/);
-  assert.doesNotMatch(skillHelperSource, /references\/architecture\.md/);
-  assert.doesNotMatch(skillHelperSource, /references\/toolbox\.md/);
-  assert.doesNotMatch(skillHelperSource, /zerlum-facade-lighting-skill\.md/);
-  assert.match(skillHelperSource, /function buildZerlumSkillContext/);
-  assert.match(skillHelperSource, /function withZerlumSkillContext/);
-  assert.match(skillHelperSource, /function withZerlumSkillGenerationPrompt/);
-  assert.match(skillHelperSource, /forGeneration = true/);
-  assert.match(skillHelperTypes, /export function withZerlumSkillContext/);
-  assert.match(skillHelperTypes, /forGeneration\?: boolean/);
-  assert.match(skillHelperTypes, /export function withZerlumSkillGenerationPrompt/);
+  const helper = readFileSync(skillHelperPath, "utf8");
+  const declarations = readFileSync(skillHelperTypesPath, "utf8");
+  assert.match(helper, /zerlum-landscape-skill\/SKILL\.md/);
+  for (const relativePath of expectedSkillFiles.slice(1)) {
+    assert.match(helper, new RegExp(relativePath.split("/").at(-1).replace(".md", "")));
+  }
+  assert.match(helper, /function buildZerlumLandscapeContext/);
+  assert.match(helper, /function withZerlumLandscapeContext/);
+  assert.match(helper, /function withZerlumLandscapeGenerationPrompt/);
+  assert.match(helper, /forGeneration = true/);
+  assert.match(declarations, /export function withZerlumLandscapeContext/);
+  assert.match(declarations, /forGeneration\?: boolean/);
+  assert.match(declarations, /export function withZerlumLandscapeGenerationPrompt/);
 });
 
-test("skill context sent to model calls stays within a safe request size", async () => {
-  const { withZerlumSkillContext, withZerlumSkillGenerationPrompt } =
-    await import(new URL("../api/zerlum-skill.js", import.meta.url));
-  const ordinaryPrompt = withZerlumSkillContext("请根据参考图生成照明方案建议。");
-  const generationPrompt = withZerlumSkillGenerationPrompt("生成夜景效果图。");
-
-  assert.match(ordinaryPrompt, /Zerlum 后端统一灯光设计 Skill/);
-  assert.match(ordinaryPrompt, /Zerlum Lighting Design Skill/);
-  assert.match(ordinaryPrompt, /Universal Design Thinking/);
-  assert.match(ordinaryPrompt, /Differentiation Variable Pool/);
-  assert.ok(Buffer.byteLength(ordinaryPrompt, "utf8") < 60_000);
-  assert.ok(Buffer.byteLength(generationPrompt, "utf8") < 60_000);
-});
-
-test("generation model skill context stays compact for image and video providers", async () => {
-  const { withZerlumSkillGenerationPrompt } =
-    await import(new URL("../api/zerlum-skill.js", import.meta.url));
-  const generationPrompt = withZerlumSkillGenerationPrompt(
-    "生成一个酒店大堂室内灯光效果图，保留原图构图。",
+test("landscape context stays inside provider request limits", async () => {
+  const { withZerlumLandscapeContext, withZerlumLandscapeGenerationPrompt } =
+    await import(new URL("../api/zerlum-landscape-skill.js", import.meta.url));
+  const ordinaryPrompt = withZerlumLandscapeContext("分析场地并比较两个设计方向。", {
+    forGeneration: false,
+  });
+  const generationPrompt = withZerlumLandscapeGenerationPrompt(
+    "保留场地结构，深化入口植物与铺装。",
   );
 
+  assert.match(ordinaryPrompt, /Zerlum Landscape Design Skill/);
+  assert.match(ordinaryPrompt, /用户明确要求、项目简报和场地资料优先/);
+  assert.ok(Buffer.byteLength(ordinaryPrompt, "utf8") < 70_000);
   assert.ok(Buffer.byteLength(generationPrompt, "utf8") < 4_000);
-  assert.match(generationPrompt, /Zerlum 生成模型压缩灯光设计约束/);
-  assert.match(generationPrompt, /室内、室外建筑、景观、文旅夜游、视频镜头或不确定/);
+  assert.match(generationPrompt, /Zerlum 景观生成约束/);
+  assert.match(generationPrompt, /保结构优化、概念改造、局部替换/);
   assert.match(generationPrompt, /用户原始生成提示词/);
-  assert.doesNotMatch(generationPrompt, /---\s*\nname: zerlum-lighting-design/);
-  assert.doesNotMatch(generationPrompt, /references\/00-universal-design-thinking\.md/);
-  assert.doesNotMatch(generationPrompt, /references\/architecture\.md/);
+  assert.doesNotMatch(generationPrompt, /zerlum-landscape-design/);
 });
 
-test("deployment config includes the skill markdown in API function bundles", () => {
-  assert.equal(existsSync(vercelConfigPath), true);
-
-  const vercelConfig = JSON.parse(readFileSync(vercelConfigPath, "utf8"));
+test("deployment bundles the landscape markdown package", () => {
+  const vercelConfig = JSON.parse(readFileSync(join(root, "vercel.json"), "utf8"));
   const includeFiles = vercelConfig.functions?.["api/*.ts"]?.includeFiles;
 
   assert.equal(typeof includeFiles, "string");
-  assert.match(includeFiles, /api\/zerlum-lighting-skill\/\*\*/);
-  assert.doesNotMatch(includeFiles, /api\/zerlum-agent-context\/\*\*/);
-  assert.doesNotMatch(includeFiles, /knowledge\/desktop-lighting-library/);
+  assert.match(includeFiles, /api\/zerlum-landscape-skill\/\*\*/);
+  assert.doesNotMatch(includeFiles, /zerlum-lighting-skill/);
 });
 
-test("local and production backend routes attach skill to chat and video prompts but not image generation prompts", () => {
-  assert.match(
-    viteSource,
-    /from "\.\/api\/zerlum-skill\.js"/,
-  );
-  assert.match(
-    apiServerSource,
-    /from "\.\/zerlum-skill\.js"/,
-  );
+test("local and production routes share landscape context while image providers receive clean prompts", () => {
+  assert.match(viteSource, /from "\.\/api\/zerlum-landscape-skill\.js"/);
+  assert.match(apiServerSource, /from "\.\/zerlum-landscape-skill\.js"/);
 
   for (const source of [viteSource, apiServerSource]) {
-    assert.match(source, /withZerlumSkillContext/);
-    assert.match(source, /withZerlumSkillGenerationPrompt/);
-    assert.match(source, /promptInstruction = withZerlumSkillContext/);
+    assert.match(source, /withZerlumLandscapeContext/);
+    assert.match(source, /withZerlumLandscapeGenerationPrompt/);
+    assert.match(source, /promptInstruction = withZerlumLandscapeContext/);
     assert.match(
       source,
-      /promptInstruction = withZerlumSkillContext\([\s\S]*\{\s*forGeneration:\s*false\s*\}/,
+      /promptInstruction = withZerlumLandscapeContext\([\s\S]*\{\s*forGeneration:\s*false\s*\}/,
     );
-    assert.match(source, /skillPrompt = withZerlumSkillGenerationPrompt\(prompt\)/);
+    assert.match(source, /skillPrompt = withZerlumLandscapeGenerationPrompt\(prompt\)/);
     assert.match(source, /buildArkVideoContent\(\{\s*prompt:\s*skillPrompt,/);
   }
 
   for (const imageRouteSource of [viteImageRouteSource, apiImageRouteSource]) {
-    assert.doesNotMatch(imageRouteSource, /withZerlumSkillGenerationPrompt\(prompt\)/);
+    assert.doesNotMatch(imageRouteSource, /withZerlumLandscapeGenerationPrompt\(prompt\)/);
     assert.doesNotMatch(imageRouteSource, /prompt:\s*skillPrompt,/);
   }
 
   assert.match(
     viteSource,
-    /const enrichedMessage = isOutlineTask\s*\?\s*withZerlumSkillContext\(baseMessage,\s*\{\s*forGeneration:\s*false\s*\}\)\s*:\s*withZerlumSkillContext\(baseMessage\);/,
+    /const enrichedMessage = isOutlineTask\s*\?\s*withZerlumLandscapeContext\(baseMessage,\s*\{\s*forGeneration:\s*false\s*\}\)\s*:\s*withZerlumLandscapeContext\(baseMessage\);/,
   );
   assert.match(
     apiServerSource,
-    /return isOutlineTask\s*\?\s*withZerlumSkillContext\(basePrompt,\s*\{\s*forGeneration:\s*false\s*\}\)\s*:\s*withZerlumSkillContext\(basePrompt\);/,
+    /return isOutlineTask\s*\?\s*withZerlumLandscapeContext\(basePrompt,\s*\{\s*forGeneration:\s*false\s*\}\)\s*:\s*withZerlumLandscapeContext\(basePrompt\);/,
   );
 });

@@ -103,30 +103,29 @@ test("agent proxy sends Ark Responses image and text content for non-main routes
   assert.match(agentProxyBlock, /input:\s*\[\s*\{\s*role:\s*"user",\s*content,/);
 });
 
-test("canvas visual agent uses the layered lighting design frame instead of the old night-only prompt mode", () => {
+test("canvas visual agent uses the evidence-led landscape design frame", () => {
   for (const backendBlock of [agentProxyBlock, apiAgentPromptBlock]) {
-    assert.match(backendBlock, /AI无限画布照明设计框架/);
+    assert.match(backendBlock, /方案画布景观设计框架/);
     assert.match(
       backendBlock,
-      /根据用户任务选择输出形式：提示词、画面分析、修改建议或照明设计说明/,
+      /根据用户任务选择输出形式：景观提示词、场地或画面分析、方向比较、节点深化或修改建议/,
     );
-    assert.match(backendBlock, /室内、室外建筑、景观、文旅夜游、视频镜头或不确定/);
-    assert.match(backendBlock, /用户参考图、文字要求和画布节点关系优先/);
-    assert.match(backendBlock, /不要机械套用固定蓝调室外夜景模板/);
-    assert.doesNotMatch(backendBlock, /只输出两段：场景判断依据、夜景效果图提示词/);
-    assert.doesNotMatch(backendBlock, /只生成夜景效果图提示词相关内容/);
+    assert.match(backendBlock, /保结构优化、概念改造、局部替换、方向变体、季节时间变化、自由生成还是视频漫游/);
+    assert.match(backendBlock, /用户明确要求、项目资料和画布显式关系优先/);
+    assert.match(backendBlock, /默认保持原图视角、透视、尺度、地形、建筑/);
+    assert.match(backendBlock, /不得默认蓝调夜景或湿润地面/);
   }
 
   assert.match(
     appSource,
-    /基于画布图片、节点关系和用户要求，生成或优化照明设计视觉提示词/,
+    /基于画布图片、节点关系和用户要求，生成或优化景观设计视觉提示词/,
   );
-  assert.match(appSource, /视频镜头或不确定类型/);
-  assert.match(appSource, /用户参考图、文字要求和画布节点关系优先/);
-  assert.doesNotMatch(appSource, /当前任务是为图片节点生成夜景照明效果图提示词/);
+  assert.match(appSource, /保结构优化、概念改造、局部替换、方向变体、季节时间变化、自由生成或视频漫游/);
+  assert.match(appSource, /用户明确要求、项目资料和画布显式关系优先/);
+  assert.doesNotMatch(appSource, /夜景照明效果图提示词/);
 });
 
-test("canvas prompt proxy adapts night render prompts to indoor or outdoor scenes", () => {
+test("canvas prompt proxy produces evidence-led landscape visualization prompts", () => {
   assert.match(promptProxyBlock, /server\.middlewares\.use\("\/api\/zerlum-prompt"/);
   assert.match(promptProxyBlock, /OPENAI_PROMPT_API_KEY/);
   assert.match(promptProxyBlock, /OPENAI_API_KEY/);
@@ -147,17 +146,15 @@ test("canvas prompt proxy adapts night render prompts to indoor or outdoor scene
   assert.match(apiPromptHandlerBlock, /type:\s*"text"/);
   assert.match(apiPromptHandlerBlock, /messages:\s*\[\s*\{\s*role:\s*"user",\s*content:/);
   assert.match(apiPromptHandlerBlock, /extractOpenAiChatCompletionText\(JSON\.parse\(upstreamText\)\)/);
-  assert.match(promptProxyBlock, /可直接用于夜景效果图生成/);
-  assert.match(promptProxyBlock, /先判断图片场景属于室内、室外还是不确定/);
-  assert.match(apiPromptHandlerBlock, /先判断图片场景属于室内、室外还是不确定/);
-  assert.match(promptProxyBlock, /用户已有提示词和参考图的明确要求优先/);
-  assert.match(apiPromptHandlerBlock, /用户已有提示词和参考图的明确要求优先/);
-  assert.match(promptProxyBlock, /室内[\s\S]*不要默认套用蓝调时刻/);
-  assert.match(apiPromptHandlerBlock, /室内[\s\S]*不要默认套用蓝调时刻/);
-  assert.match(promptProxyBlock, /室外[\s\S]*蓝调时刻/);
-  assert.match(apiPromptHandlerBlock, /室外[\s\S]*蓝调时刻/);
-  assert.doesNotMatch(promptProxyBlock, /整体氛围必须明确为蓝调时刻/);
-  assert.doesNotMatch(apiPromptHandlerBlock, /整体氛围必须明确为蓝调时刻/);
+  assert.match(promptProxyBlock, /可直接用于景观效果图生成/);
+  assert.match(promptProxyBlock, /保结构优化、概念改造、局部替换、方向变体、季节时间变化还是自由生成/);
+  assert.match(apiPromptHandlerBlock, /保结构优化、概念改造、局部替换、方向变体、季节时间变化还是自由生成/);
+  assert.match(promptProxyBlock, /用户已有提示词、项目资料和参考图的明确要求优先/);
+  assert.match(apiPromptHandlerBlock, /用户已有提示词、项目资料和参考图的明确要求优先/);
+  assert.match(promptProxyBlock, /空间层次、功能和游线、植物群落与成熟度、材料尺度与接缝/);
+  assert.match(apiPromptHandlerBlock, /空间层次、功能和游线、植物群落与成熟度、材料尺度与接缝/);
+  assert.match(promptProxyBlock, /不得无依据增加路径、水景、构筑物、地形或大规模人群/);
+  assert.match(apiPromptHandlerBlock, /不得无依据增加路径、水景、构筑物、地形或大规模人群/);
   assert.match(promptProxyBlock, /不要输出任何前缀/);
   assert.match(apiPromptHandlerBlock, /不要输出任何前缀/);
   assert.match(promptProxyBlock, /cleanCanvasPromptOutput\(prompt\)/);
