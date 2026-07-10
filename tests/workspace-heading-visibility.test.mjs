@@ -55,17 +55,15 @@ test("workspace no longer keeps home-navigation state", () => {
   assert.doesNotMatch(appSource, /showWelcomeHome/);
   assert.doesNotMatch(appSource, /setShowWelcomeHome/);
   assert.doesNotMatch(appSource, /function handleReturnHome\(\)/);
-  assert.match(
-    appSource,
-    /const shouldShowWelcome = !session \|\| !activeProject \|\| !currentMember;/,
-  );
+  assert.match(appSource, /const shouldShowWelcome = !session \|\| !activeProject;/);
+  assert.doesNotMatch(appSource, /currentMember/);
 });
 
-test("workspace dock frame is long enough for the expanded menu", () => {
+test("workspace dock is compact and uses direct state transitions", () => {
   assert.match(
     dockStylesSource,
-    /\.dock-outer\s*{[\s\S]*width:\s*min\(100%,\s*1080px\)/,
+    /\.dock-outer\s*{[\s\S]*width:\s*min\(100%,\s*620px\)/,
   );
-  assert.match(appSource, /baseItemSize=\{98\}/);
-  assert.match(appSource, /magnification=\{132\}/);
+  assert.match(dockStylesSource, /\.dock-item\s*{[\s\S]*height:\s*38px/);
+  assert.doesNotMatch(dockStylesSource, /box-shadow:[\s\S]*0 18px 48px/);
 });

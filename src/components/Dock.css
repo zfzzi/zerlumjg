@@ -1,7 +1,7 @@
 .dock-outer {
   position: relative;
   display: flex;
-  width: min(100%, 1080px);
+  width: min(100%, 620px);
   max-width: 100%;
   align-items: center;
   justify-content: center;
@@ -10,25 +10,22 @@
 }
 
 .dock-panel {
-  position: absolute;
-  bottom: 6px;
+  position: relative;
+  bottom: auto;
   left: 50%;
   z-index: 8;
   display: flex;
   width: fit-content;
-  max-width: min(100%, calc(100vw - 230px));
+  max-width: 100%;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  padding: 5px;
-  background: color-mix(in srgb, var(--surface-elevated) 74%, transparent);
-  box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.06),
-    0 18px 48px rgb(0 0 0 / 0.18);
+  padding: 3px;
+  background: var(--surface-elevated);
+  box-shadow: none;
   transform: translateX(-50%);
-  backdrop-filter: blur(18px) saturate(140%);
-  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: none;
 }
 
 .dock-item {
@@ -39,9 +36,9 @@
   flex: 0 0 auto;
   border: 1px solid transparent;
   min-width: 0;
-  height: 34px;
+  height: 38px;
   border-radius: 999px;
-  padding: 0 12px;
+  padding: 0 16px;
   color: var(--muted);
   background: transparent;
   box-shadow: none;
@@ -61,7 +58,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.78rem;
-  font-weight: 520;
+  font-weight: 560;
   letter-spacing: 0;
   pointer-events: none;
 }
@@ -74,21 +71,13 @@
 }
 
 .dock-item.active {
-  color: var(--text);
-  border-color: var(--line);
-  background: color-mix(in srgb, var(--text) 10%, transparent);
+  color: var(--accent-ink);
+  border-color: transparent;
+  background: var(--accent);
 }
 
 .dock-item.active::after {
-  content: "";
-  position: absolute;
-  right: 35%;
-  bottom: -5px;
-  left: 35%;
-  height: 2px;
-  border-radius: 999px;
-  background: var(--accent);
-  box-shadow: 0 -5px 18px var(--accent);
+  content: none;
 }
 
 @media (max-width: 1180px) {

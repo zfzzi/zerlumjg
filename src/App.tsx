@@ -17,7 +17,6 @@ import {
   type SyntheticEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
-import { motion } from "motion/react";
 import {
   Archive,
   ArrowClockwise,
@@ -51,10 +50,10 @@ import {
 } from "@phosphor-icons/react";
 import Dock, { type DockItemData } from "./components/Dock";
 import DropdownSelect from "./components/DropdownSelect";
-import { LiquidMetalButton } from "./components/LiquidMetalButton";
-import Prism from "./components/Prism";
 import {
   createLandscapeProject,
+  designStages,
+  landscapeProjectTypes,
   type DesignStage,
   type LandscapeProject,
 } from "./domain/landscape";
@@ -99,9 +98,9 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { id: "agent", label: "zerlum agent", icon: ChatCircleText },
-  { id: "canvas", label: "AI无限画布", icon: ImageIcon },
-  { id: "text", label: "文本制作", icon: FileText },
+  { id: "agent", label: "景观 Agent", icon: ChatCircleText },
+  { id: "canvas", label: "方案画布", icon: ImageIcon },
+  { id: "text", label: "文本交付", icon: FileText },
 ];
 
 type AgentAttachment = {
@@ -1614,6 +1613,27 @@ function App() {
     setProjectEditOpen(false);
   }
 
+  function handleProjectContextUpdate(update: Partial<Project>) {
+    if (!activeProject) {
+      return;
+    }
+
+    setProjects((current) =>
+      current.map((project) =>
+        project.id === activeProject.id
+          ? {
+              ...project,
+              ...update,
+              brief: update.brief
+                ? { ...project.brief, ...update.brief }
+                : project.brief,
+              updatedAt: new Date().toISOString().slice(0, 10),
+            }
+          : project,
+      ),
+    );
+  }
+
   function handleCurrentProfileUpdate(profile: {
     name: string;
     avatarLabel: string;
@@ -1918,6 +1938,7 @@ function App() {
             handleProjectMaterialsUpload(activeProject.id, files)
           }
           onProjectMaterialDelete={handleProjectMaterialDelete}
+          onProjectUpdate={handleProjectContextUpdate}
           onOpenProjectEdit={openProjectEdit}
           onOpenNewProject={() => setNewProjectOpen(true)}
           onThemeToggle={() =>
@@ -1959,6 +1980,27 @@ function App() {
               }
             />
             <LabelledInput
+              label="项目地点"
+              value={newProjectDraft.location ?? ""}
+              onChange={(location) =>
+                setNewProjectDraft({ ...newProjectDraft, location })
+              }
+            />
+            <label className="labelled-input">
+              <span>设计阶段</span>
+              <DropdownSelect
+                value={newProjectDraft.designStage ?? "概念方案"}
+                onValueChange={(designStage) =>
+                  setNewProjectDraft({
+                    ...newProjectDraft,
+                    designStage: designStage as DesignStage,
+                  })
+                }
+                ariaLabel="选择新项目设计阶段"
+                options={designStages.map((stage) => ({ value: stage, label: stage }))}
+              />
+            </label>
+            <LabelledInput
               label="客户或备注"
               value={newProjectDraft.client}
               onChange={(client) =>
@@ -1990,6 +2032,27 @@ function App() {
                 setProjectEditDraft({ ...projectEditDraft, type })
               }
             />
+            <LabelledInput
+              label="项目地点"
+              value={projectEditDraft.location ?? ""}
+              onChange={(location) =>
+                setProjectEditDraft({ ...projectEditDraft, location })
+              }
+            />
+            <label className="labelled-input">
+              <span>设计阶段</span>
+              <DropdownSelect
+                value={projectEditDraft.designStage ?? "概念方案"}
+                onValueChange={(designStage) =>
+                  setProjectEditDraft({
+                    ...projectEditDraft,
+                    designStage: designStage as DesignStage,
+                  })
+                }
+                ariaLabel="选择项目设计阶段"
+                options={designStages.map((stage) => ({ value: stage, label: stage }))}
+              />
+            </label>
             <LabelledInput
               label="客户或备注"
               value={projectEditDraft.client}
@@ -2025,42 +2088,23 @@ function WelcomeScreen({
 }) {
   return (
     <section className="welcome-screen">
-      <WelcomeThreeBackground />
-      <div className="welcome-depth-shadow" aria-hidden="true" />
-
-      <motion.div
-        className="welcome-card"
-        initial={{ opacity: 0, y: 28, filter: "blur(12px)" }}
-        animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-        transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-      >
+      <div className="welcome-landscape-field" aria-hidden="true" />
+      <div className="welcome-card">
         <img
           className="logo-mark-image"
           src="/brand/zerlum-logo-mark.png"
           alt="Zerlum"
         />
-        <h1>Welcome Zerlum</h1>
-        <LiquidMetalButton label={actionLabel} onClick={onOpenLogin} />
-      </motion.div>
+        <div className="welcome-copy">
+          <h1>从场地到方案</h1>
+          <p>理解场地，推演方向，完成表达。</p>
+        </div>
+        <button className="welcome-primary-action" type="button" onClick={onOpenLogin}>
+          {actionLabel}
+          <ArrowUp size={18} weight="bold" />
+        </button>
+      </div>
     </section>
-  );
-}
-
-function WelcomeThreeBackground() {
-  return (
-    <div className="welcome-three" aria-hidden="true">
-      <Prism
-        animationType="3drotate"
-        timeScale={0.4}
-        height={4.7}
-        baseWidth={5.2}
-        scale={3.7}
-        hueShift={0.2584}
-        colorFrequency={1.6}
-        noise={0.08}
-        glow={1.1}
-      />
-    </div>
   );
 }
 
@@ -2094,7 +2138,7 @@ function AuthDialog({
       <div className="auth-brand">
         <img src="/brand/zerlum-logo-mark.png" alt="Zerlum" />
         <div>
-          <h3>Welcome Zerlum</h3>
+          <h3>进入 Zerlum</h3>
           <p>登录或注册后进入景观设计工作台。</p>
         </div>
       </div>
@@ -2295,6 +2339,7 @@ function Workspace({
   onProjectChange,
   onProjectMaterialsUpload,
   onProjectMaterialDelete,
+  onProjectUpdate,
   onOpenProjectEdit,
   onOpenNewProject,
   onThemeToggle,
@@ -2317,6 +2362,7 @@ function Workspace({
   onProjectChange: (projectId: string) => void;
   onProjectMaterialsUpload: (files: FileList | File[]) => void;
   onProjectMaterialDelete: (materialId: string) => void;
+  onProjectUpdate: (update: Partial<Project>) => void;
   onOpenProjectEdit: () => void;
   onOpenNewProject: () => void;
   onThemeToggle: () => void;
@@ -2363,6 +2409,21 @@ function Workspace({
             src="/brand/zerlum-logo-wide.png"
             alt="Zerlum"
           />
+          <div className="header-project-context">
+            <DropdownSelect
+              className="header-project-dropdown"
+              value={project.id}
+              onValueChange={onProjectChange}
+              ariaLabel="切换当前项目"
+              options={projects.map((item) => ({
+                value: item.id,
+                label: item.name,
+              }))}
+            />
+            <button type="button" onClick={onOpenProjectEdit}>
+              {project.location || project.type} / {project.designStage}
+            </button>
+          </div>
         </div>
         <Dock
           items={dockItems}
@@ -2373,6 +2434,15 @@ function Workspace({
           distance={150}
         />
         <div className="profile-tools">
+          <button
+            className="icon-button header-new-project"
+            type="button"
+            onClick={onOpenNewProject}
+            aria-label="新建景观项目"
+            title="新建景观项目"
+          >
+            <PlusCircle size={18} weight="bold" />
+          </button>
           <ThemeToggle theme={theme} onToggle={onThemeToggle} />
           <button className="profile-button" type="button" onClick={onOpenProfile}>
             {session.avatarUrl ? (
@@ -2459,6 +2529,7 @@ function Workspace({
             onVoiceSubmit={handleAgentVoiceSubmit}
             onUploadMaterials={onProjectMaterialsUpload}
             onDeleteMaterial={onProjectMaterialDelete}
+            onProjectUpdate={onProjectUpdate}
           />
         )}
         <div
@@ -2560,6 +2631,7 @@ function AgentView({
   onVoiceSubmit,
   onUploadMaterials,
   onDeleteMaterial,
+  onProjectUpdate,
 }: {
   project: Project;
   materials: ProjectMaterial[];
@@ -2576,10 +2648,13 @@ function AgentView({
   ) => void;
   onUploadMaterials: (files: FileList | File[]) => void;
   onDeleteMaterial: (materialId: string) => void;
+  onProjectUpdate: (update: Partial<Project>) => void;
 }) {
   const greeting = getTimeOfDayGreeting();
   const hasConversation = agentMessages.length > 0;
-  const userMessages = agentMessages.filter((message) => message.role === "user");
+  const latestAssistantMessage = [...agentMessages]
+    .reverse()
+    .find((message) => message.role === "assistant" && message.text.trim());
   const displayUserName = userName.trim() || "用户";
   const agentConversationEndRef = useRef<HTMLDivElement | null>(null);
   const [expandedAgentMessageIds, setExpandedAgentMessageIds] = useState<Set<string>>(
@@ -2592,6 +2667,37 @@ function AgentView({
     { icon: CopySimple, label: "复制" },
     { icon: ShareNetwork, label: "分享" },
   ];
+  const quickTasks = [
+    "分析场地问题与机会",
+    "提出概念方向",
+    "梳理功能与游线",
+    "深化关键设计节点",
+    "建立植物与季相策略",
+    "检查方案完整性",
+  ];
+
+  function handleQuickTask(task: string) {
+    onChatInput(task);
+    window.requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLTextAreaElement>(
+          ".agent-stage .agent-input-area textarea",
+        )
+        ?.focus();
+    });
+  }
+
+  function updateBrief(
+    field: keyof Project["brief"],
+    value: string,
+  ) {
+    onProjectUpdate({
+      brief: {
+        ...project.brief,
+        [field]: value,
+      },
+    });
+  }
 
   function handleAgentAction(label: string, text: string) {
     if (label === "复制" && navigator.clipboard) {
@@ -2624,15 +2730,99 @@ function AgentView({
   return (
     <div className="agent-layout">
       <aside className="context-rail">
-        <InfoBlock
-          icon={ClipboardText}
-          title="项目资料"
-          rows={[
-            ["类型", project.type],
-            ["客户", project.client],
-            ["更新", project.updatedAt],
-          ]}
-        />
+        <div className="rail-heading">
+          <div>
+            <span>当前项目</span>
+            <h2>项目简报</h2>
+          </div>
+          <small>{project.updatedAt}</small>
+        </div>
+        <div className="brief-form">
+          <label className="brief-field">
+            <span>项目类型</span>
+            <DropdownSelect
+              value={project.type}
+              onValueChange={(type) => onProjectUpdate({ type })}
+              ariaLabel="选择项目类型"
+              options={landscapeProjectTypes.map((type) => ({
+                value: type,
+                label: type,
+              }))}
+            />
+          </label>
+          <label className="brief-field">
+            <span>项目地点</span>
+            <input
+              value={project.location}
+              placeholder="城市、区域或场地名称"
+              onChange={(event) =>
+                onProjectUpdate({ location: event.target.value })
+              }
+            />
+          </label>
+          <label className="brief-field">
+            <span>设计阶段</span>
+            <DropdownSelect
+              value={project.designStage}
+              onValueChange={(designStage) =>
+                onProjectUpdate({ designStage: designStage as DesignStage })
+              }
+              ariaLabel="选择设计阶段"
+              options={designStages.map((stage) => ({
+                value: stage,
+                label: stage,
+              }))}
+            />
+          </label>
+          <label className="brief-field">
+            <span>客户或委托方</span>
+            <input
+              value={project.client}
+              placeholder="可稍后补充"
+              onChange={(event) =>
+                onProjectUpdate({ client: event.target.value })
+              }
+            />
+          </label>
+          <label className="brief-field wide">
+            <span>项目目标</span>
+            <textarea
+              value={project.brief.goals}
+              placeholder="希望解决什么问题"
+              onChange={(event) => updateBrief("goals", event.target.value)}
+              rows={2}
+            />
+          </label>
+          <label className="brief-field wide">
+            <span>使用人群</span>
+            <textarea
+              value={project.brief.users}
+              placeholder="主要使用者和典型场景"
+              onChange={(event) => updateBrief("users", event.target.value)}
+              rows={2}
+            />
+          </label>
+          <label className="brief-field wide">
+            <span>场地范围</span>
+            <textarea
+              value={project.brief.siteScope}
+              placeholder="红线、边界或已知场地条件"
+              onChange={(event) => updateBrief("siteScope", event.target.value)}
+              rows={2}
+            />
+          </label>
+          <label className="brief-field wide">
+            <span>已知限制</span>
+            <textarea
+              value={project.brief.constraints}
+              placeholder="工期、预算、规范或待复核条件"
+              onChange={(event) =>
+                updateBrief("constraints", event.target.value)
+              }
+              rows={2}
+            />
+          </label>
+        </div>
         <ProjectMaterialsPanel
           materials={materials}
           onUpload={onUploadMaterials}
@@ -2726,6 +2916,18 @@ function AgentView({
               <p className="agent-greeting">
                 {greeting}，<strong>{displayUserName}</strong>
               </p>
+              <div className="agent-empty-copy">
+                <h1>从场地理解开始</h1>
+                <p>补充项目资料，或选择一个景观设计任务。</p>
+              </div>
+              <div className="agent-quick-tasks" aria-label="景观设计快捷任务">
+                {quickTasks.map((task) => (
+                  <button key={task} type="button" onClick={() => handleQuickTask(task)}>
+                    <span>{task}</span>
+                    <ArrowUp size={15} weight="bold" />
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           <AgentComposer
@@ -2738,23 +2940,38 @@ function AgentView({
         </div>
       </section>
       <aside className="history-rail">
-        <PanelTitle icon={ChatCircleText} title="历史聊天记录" />
-        {userMessages.length > 0 ? (
-          <div className="history-list">
-            {userMessages.map((message) => (
-              <article className="history-card" key={message.id}>
-                <span>本次会话</span>
-                <strong>{message.text}</strong>
-              </article>
-            ))}
+        <div className="rail-heading">
+          <div>
+            <span>项目结论</span>
+            <h2>最近成果</h2>
           </div>
-        ) : (
-          <EmptyState
-            icon={ChatCircleText}
-            title="暂无聊天记录"
-            text="和 Zerlum Agent 的对话会在这里归档。"
-          />
-        )}
+        </div>
+        <div className="outcome-list">
+          <section>
+            <h3>设计方向</h3>
+            <p>
+              {latestAssistantMessage
+                ? latestAssistantMessage.text
+                : "通过“提出概念方向”形成首轮空间命题和方向比较。"}
+            </p>
+          </section>
+          <section>
+            <h3>设计节点</h3>
+            <p>
+              {latestAssistantMessage
+                ? "继续选择关键空间，可在方案画布中建立节点并深化。"
+                : "通过“深化关键设计节点”明确入口、核心场景或边界空间。"}
+            </p>
+          </section>
+          <section>
+            <h3>待确认项</h3>
+            <p>
+              {latestAssistantMessage
+                ? "复核场地边界、高程、规范和植物适生性等项目依据。"
+                : "Agent 会把资料不足、专业复核和项目假设整理在这里。"}
+            </p>
+          </section>
+        </div>
       </aside>
     </div>
   );
@@ -2837,8 +3054,8 @@ function AgentComposer({
   onValueChange,
   onSubmit,
   onVoiceSubmit,
-  placeholder = "Ask Zerlum",
-  ariaLabel = "向 Zerlum 生成助手提问",
+  placeholder = "描述场地或设计任务",
+  ariaLabel = "向景观 Agent 提问",
   disabled = false,
 }: {
   value: string;

@@ -21,10 +21,10 @@ const workspaceRenderBlock = appSource.slice(
   appSource.indexOf("function ThemeToggle"),
 );
 
-test("workspace navigation keeps zerlum agent plus image/video canvas and方案 tools", () => {
-  assert.match(navItemsBlock, /id:\s*"agent"[\s\S]*label:\s*"zerlum agent"/);
-  assert.match(navItemsBlock, /id:\s*"canvas"[\s\S]*label:\s*"AI无限画布"/);
-  assert.match(navItemsBlock, /id:\s*"text"[\s\S]*label:\s*"文本制作"/);
+test("workspace navigation keeps the three landscape work surfaces", () => {
+  assert.match(navItemsBlock, /id:\s*"agent"[\s\S]*label:\s*"景观 Agent"/);
+  assert.match(navItemsBlock, /id:\s*"canvas"[\s\S]*label:\s*"方案画布"/);
+  assert.match(navItemsBlock, /id:\s*"text"[\s\S]*label:\s*"文本交付"/);
   assert.doesNotMatch(
     navItemsBlock,
     /灯具库|数据库|知识库|灯具报价|协同中枢/,
@@ -33,7 +33,7 @@ test("workspace navigation keeps zerlum agent plus image/video canvas and方案 
     appSource,
     /type WorkspaceView =[\s\S]*\|\s*"(fixture|database|knowledge|quote|hub)"/,
   );
-  assert.match(appSource, /persisted\.activeView \?\? "agent"/);
+  assert.match(appSource, /useState<WorkspaceView>\(\s*persisted\.activeView/);
   assert.match(appSource, /setActiveView\("agent"\)/);
 });
 
