@@ -46,7 +46,7 @@ import { readFile } from "node:fs/promises";
 
 test("package exposes the complete Node test suite", async () => {
   const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
-  assert.equal(pkg.scripts.test, "node --test tests/*.test.mjs");
+  assert.equal(pkg.scripts.test, "node --test");
 });
 ```
 
@@ -61,7 +61,7 @@ Expected: FAIL because `pkg.scripts.test` is `undefined`.
 Add this entry under `scripts` in `package.json`:
 
 ```json
-"test": "node --test tests/*.test.mjs"
+"test": "node --test"
 ```
 
 - [ ] **Step 4: Run the focused test**

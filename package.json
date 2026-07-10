@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
+    "test": "node --test",
     "build": "tsc && vite build",
     "ingest:desktop-md": "powershell -ExecutionPolicy Bypass -File scripts/ingest-desktop-markdown.ps1",
     "search:desktop-md": "powershell -ExecutionPolicy Bypass -File scripts/search-desktop-markdown.ps1",
