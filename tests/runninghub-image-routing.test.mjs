@@ -104,6 +104,24 @@ test("image generation sends the canvas prompt directly and upscales qweapi outp
   }
 });
 
+test("qweapi canvas generation returns its image when RunningHub upscale is not configured", () => {
+  for (const source of [configImageHandlerBlock, apiImageHandlerBlock]) {
+    const qweapiBlock = source.slice(
+      source.indexOf("if (shouldUseOpenAiImageProvider"),
+      source.indexOf("const imageApiKey"),
+    );
+
+    assert.doesNotMatch(
+      qweapiBlock,
+      /if \(!upscaleApiKey\) \{[\s\S]{0,220}Missing RUNNINGHUB_UPSCALE_API_KEY/,
+    );
+    assert.match(
+      qweapiBlock,
+      /const generated = await runOpenAiImageGeneration\([\s\S]*if \(!upscaleApiKey\) \{[\s\S]*imageUrl: generated\.imageUrl,[\s\S]*provider: "qweapi",[\s\S]*upscaled: false,[\s\S]*return;/,
+    );
+  }
+});
+
 test("canvas image generation supports adaptive source-image aspect ratio", () => {
   assert.match(appSource, /value: "adaptive", label: "自适应"/);
   assert.match(configSource, /function normalizeRunningHubImageAspectRatio/);

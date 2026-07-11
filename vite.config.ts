@@ -2551,13 +2551,6 @@ export default defineConfig(({ mode }) => {
                   return;
                 }
 
-                if (!upscaleApiKey) {
-                  sendJson(response, 500, {
-                    error: "Missing RUNNINGHUB_UPSCALE_API_KEY",
-                  });
-                  return;
-                }
-
                 const generated = await runOpenAiImageGeneration({
                   apiKey: openAiImageApiKey,
                   endpoint: resolveOpenAiResponsesEndpoint(env, "OPENAI_IMAGE_BASE_URL"),
@@ -2565,6 +2558,19 @@ export default defineConfig(({ mode }) => {
                   prompt,
                   imageUrls: [primaryImageUrl, ...referenceImageUrls],
                 });
+
+                if (!upscaleApiKey) {
+                  sendJson(response, 200, {
+                    imageUrl: generated.imageUrl,
+                    baseImageUrl: generated.imageUrl,
+                    outputText: "已通过 qweapi 生图接口生成。未配置 RunningHub 放大接口，已返回原始生成图。",
+                    model: imageModel,
+                    provider: "qweapi",
+                    resolution: targetResolution,
+                    upscaled: false,
+                  });
+                  return;
+                }
 
                 try {
                   const upscaled = await runRunningHubUpscale({
