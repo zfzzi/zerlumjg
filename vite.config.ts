@@ -2066,12 +2066,19 @@ export default defineConfig(({ mode }) => {
                   process.env.OPENAI_DOCUMENT_OUTPUT_API_KEY ||
                   env.OPENAI_API_KEY ||
                   process.env.OPENAI_API_KEY
-                : useOpenAiChat
+                : isOutlineTask
+                  ? env.OPENAI_OUTLINE_API_KEY ||
+                    process.env.OPENAI_OUTLINE_API_KEY ||
+                    env.OPENAI_API_KEY ||
+                    process.env.OPENAI_API_KEY
+                  : useOpenAiChat
                   ? env.OPENAI_API_KEY || process.env.OPENAI_API_KEY
                   : arkApiKey;
               const missingKeyName = isDocumentOutputTask
                 ? "OPENAI_DOCUMENT_OUTPUT_API_KEY"
-                : useOpenAiChat
+                : isOutlineTask
+                  ? "OPENAI_OUTLINE_API_KEY"
+                  : useOpenAiChat
                   ? "OPENAI_API_KEY"
                   : "ARK_API_KEY";
 
@@ -2254,7 +2261,10 @@ export default defineConfig(({ mode }) => {
                   text: enrichedMessage,
                 },
               ];
-              const openAiChatEndpoint = resolveOpenAiChatEndpoint(env);
+              const openAiChatEndpoint = resolveOpenAiChatEndpoint(
+                env,
+                isOutlineTask ? "OPENAI_OUTLINE_BASE_URL" : "OPENAI_BASE_URL",
+              );
               const documentOutputEndpoint = resolveOpenAiResponsesEndpoint(env);
               const documentOutputTimeoutMs = resolveDocumentOutputTimeoutMs(env);
               const documentOutputContent = [

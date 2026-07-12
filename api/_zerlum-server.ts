@@ -2188,12 +2188,20 @@ export async function handleZerlumAgent(request: RequestLike, response: Response
           "CONCEPT_TEXT_IMAGE_API_KEY",
           "OPENAI_API_KEY",
         )
-      : useOpenAiChat
+      : isOutlineTask
+        ? envValue(
+            "OPENAI_OUTLINE_API_KEY",
+            "OPENAI_API_KEY",
+            "CONCEPT_OUTLINE_ARK_CHAT_API_KEY",
+          )
+        : useOpenAiChat
         ? envValue("OPENAI_API_KEY", "CONCEPT_OUTLINE_ARK_CHAT_API_KEY")
         : arkApiKey;
     const missingKeyName = isDocumentOutputTask
       ? "OPENAI_DOCUMENT_OUTPUT_API_KEY"
-      : useOpenAiChat
+      : isOutlineTask
+        ? "OPENAI_OUTLINE_API_KEY"
+        : useOpenAiChat
         ? "OPENAI_API_KEY"
         : "ARK_API_KEY";
 
@@ -2277,7 +2285,9 @@ export async function handleZerlumAgent(request: RequestLike, response: Response
     const upstreamEndpoint = isDocumentOutputTask
       ? resolveOpenAiResponsesEndpoint()
       : useOpenAiChat
-        ? resolveOpenAiChatEndpoint()
+        ? resolveOpenAiChatEndpoint(
+            isOutlineTask ? "OPENAI_OUTLINE_BASE_URL" : "OPENAI_BASE_URL",
+          )
         : envValue("ARK_RESPONSES_ENDPOINT") || arkEndpoint;
     const streamOpenAiChat = view === "agent" && useOpenAiChat && !isDocumentOutputTask;
     const requestPayload = isDocumentOutputTask
