@@ -212,8 +212,12 @@ test("main agent and outline stream OpenAI chat tokens", () => {
       /const streamOpenAiChat = useOpenAiChat && !isDocumentOutputTask;/,
     );
     assert.match(backendBlock, /useOpenAiChat\s*\?\s*\{\s*model: agentModel,\s*stream: streamOpenAiChat,\s*messages:/);
-    assert.match(backendBlock, /await pipeResponseBody\(upstream, response\)/);
   }
+  assert.match(apiAgentHandlerBlock, /await pipeResponseBody\(upstream, response\)/);
+  assert.match(
+    agentProxyBlock,
+    /for await \(const chunk of upstream\.body\)\s*\{\s*response\.write\(chunk\);/,
+  );
 });
 
 test("main agent falls back to Ark when the OpenAI-compatible chat request cannot connect", () => {

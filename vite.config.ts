@@ -2284,7 +2284,7 @@ export default defineConfig(({ mode }) => {
                 : useOpenAiChat
                   ? openAiChatEndpoint
                   : arkEndpoint;
-              const streamOpenAiChat = view === "agent" && useOpenAiChat && !isDocumentOutputTask;
+              const streamOpenAiChat = useOpenAiChat && !isDocumentOutputTask;
               const requestPayload = isDocumentOutputTask
                 ? {
                     model: agentModel,

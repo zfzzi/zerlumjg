@@ -2290,7 +2290,7 @@ export async function handleZerlumAgent(request: RequestLike, response: Response
             isOutlineTask ? "OPENAI_OUTLINE_BASE_URL" : "OPENAI_BASE_URL",
           )
         : envValue("ARK_RESPONSES_ENDPOINT") || arkEndpoint;
-    const streamOpenAiChat = view === "agent" && useOpenAiChat && !isDocumentOutputTask;
+    const streamOpenAiChat = useOpenAiChat && !isDocumentOutputTask;
     const requestPayload = isDocumentOutputTask
       ? {
           model: agentModel,
