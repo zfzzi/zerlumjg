@@ -73,6 +73,8 @@ test("outline selects one shared layout style and paginates explicit sources", (
 
 test("outline requires project evidence beyond the current instruction", () => {
   assert.match(outlineSubmitBlock, /const hasProjectBriefInput = Boolean/);
+  assert.match(outlineSubmitBlock, /project\.type !== "其他"/);
+  assert.match(outlineSubmitBlock, /project\.designStage !== "概念方案"/);
   assert.match(outlineSubmitBlock, /project\.brief\.goals\.trim\(\)/);
   assert.match(outlineSubmitBlock, /project\.brief\.constraints\.trim\(\)/);
   assert.match(

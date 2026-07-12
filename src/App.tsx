@@ -9404,6 +9404,8 @@ function TextView({
     const agentPrompt = buildOutlineAgentContext(message);
     const hasProjectBriefInput = Boolean(
       (project.name && project.name !== "未命名景观项目") ||
+        project.type !== "其他" ||
+        project.designStage !== "概念方案" ||
         project.location.trim() ||
         project.client.trim() ||
         project.brief.goals.trim() ||
