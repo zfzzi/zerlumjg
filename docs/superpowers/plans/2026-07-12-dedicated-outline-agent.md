@@ -347,7 +347,8 @@ The result must not contain an identity preamble or unsupported external facts.
 Reload `https://www.yehuiai.com`, open the text-delivery view, and verify no new browser error/warning logs. Check Vercel logs for a successful Outline request and confirm no secret appears in source changes:
 
 ```powershell
-git diff HEAD~3..HEAD | Select-String -Pattern 'github_pat_|sk-[A-Za-z0-9]'
+$secretPattern = 'github' + '_pat_|' + 's' + 'k-[A-Za-z0-9]'
+git diff HEAD~3..HEAD | Select-String -Pattern $secretPattern
 git status --short
 ```
 
