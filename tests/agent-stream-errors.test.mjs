@@ -68,6 +68,14 @@ test("document outline agent errors are parsed and normalized before display", (
   );
   assert.match(
     outlineSubmitBlock,
-    /normalizeAgentErrorMessage\(\s*error instanceof Error\s*\?\s*error\.message\s*:\s*"",\s*"方案 Agent 连接失败，请稍后再试。",?\s*\)/,
+    /const rawMessage = error instanceof Error \? error\.message : "";/,
+  );
+  assert.match(
+    outlineSubmitBlock,
+    /Failed to fetch\|NetworkError\|Load failed/,
+  );
+  assert.match(
+    outlineSubmitBlock,
+    /normalizeAgentErrorMessage\(\s*rawMessage,\s*"方案 Agent 连接失败，请稍后再试。",?\s*\)/,
   );
 });
