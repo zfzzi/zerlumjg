@@ -1897,7 +1897,7 @@ async function pollRunningHubAppOutput(
   throw new Error("RunningHub 放大任务等待超时。");
 }
 
-async function runRunningHubUpscale({
+async function submitRunningHubUpscale({
   apiKey,
   webappId,
   imageUrl,
@@ -1936,10 +1936,95 @@ async function runRunningHubUpscale({
     throw new Error("RunningHub 放大任务提交成功但没有返回 taskId。");
   }
 
-  const result = await pollRunningHubAppOutput(apiKey, taskId, [imageUrl]);
+  return { taskId };
+}
+
+async function queryRunningHubUpscale(apiKey: string, taskId: string) {
+  const outputPayload = await postRunningHubJson(
+    runningHubAppOutputsEndpoint,
+    apiKey,
+    { apiKey, taskId },
+  );
+  const imageUrl = firstOutputImageUrl(outputPayload);
+
+  if (imageUrl) {
+    return {
+      taskId,
+      status: "done" as const,
+      imageUrl,
+      outputText: "高清放大完成。",
+    };
+  }
+
+  const outputCode = extractTopLevelCode(outputPayload);
+  const outputMessage = extractRunningHubMessage(outputPayload);
+  const outputStatus = extractRunningStatus(outputPayload);
+
+  if (
+    (outputCode &&
+      outputCode !== "0" &&
+      outputCode !== "200" &&
+      !isRunningMessage(outputMessage)) ||
+    isFailedRunningStatus(outputStatus)
+  ) {
+    return {
+      taskId,
+      status: "error" as const,
+      imageUrl: "",
+      outputText: outputMessage || "RunningHub 高清放大失败。",
+    };
+  }
+
+  try {
+    const statusPayload = await postRunningHubJson(
+      runningHubAppStatusEndpoint,
+      apiKey,
+      { apiKey, taskId },
+    );
+    const status = extractRunningStatus(statusPayload);
+    const statusMessage = extractRunningHubMessage(statusPayload);
+
+    if (isFailedRunningStatus(status)) {
+      return {
+        taskId,
+        status: "error" as const,
+        imageUrl: "",
+        outputText: statusMessage || `RunningHub 高清放大失败：${status}`,
+      };
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+
+    if (message && !isRunningMessage(message)) {
+      throw error;
+    }
+  }
 
   return {
     taskId,
+    status: "running" as const,
+    imageUrl: "",
+    outputText: outputMessage || "高清放大中。",
+  };
+}
+
+async function runRunningHubUpscale(args: {
+  apiKey: string;
+  webappId: string;
+  imageUrl: string;
+  targetResolution: string;
+  configuredNodeInfo: string;
+}) {
+  const submitted = await submitRunningHubUpscale(args);
+
+  const result = await pollRunningHubAppOutput(
+    args.apiKey,
+    submitted.taskId,
+    [args.imageUrl],
+  );
+
+  return {
+    taskId: submitted.taskId,
     imageUrl: result.imageUrl,
     payload: result.payload,
   };
@@ -2491,6 +2576,72 @@ export default defineConfig(({ mode }) => {
             }
           });
 
+          server.middlewares.use(
+            "/api/zerlum-image-upscale-status",
+            async (request, response) => {
+              if (request.method !== "GET" && request.method !== "POST") {
+                sendJson(response, 405, { error: "Method not allowed" });
+                return;
+              }
+
+              try {
+                const body =
+                  request.method === "POST"
+                    ? JSON.parse(await readBody(request))
+                    : {};
+                const taskId = String(
+                  body.taskId ??
+                    new URL(request.url ?? "", "http://localhost").searchParams.get(
+                      "taskId",
+                    ) ??
+                    "",
+                ).trim();
+
+                if (!taskId) {
+                  sendJson(response, 400, { error: "Task id is required" });
+                  return;
+                }
+
+                const upscaleApiKey =
+                  env.RUNNINGHUB_UPSCALE_API_KEY ||
+                  process.env.RUNNINGHUB_UPSCALE_API_KEY ||
+                  env.NIGHT_RENDER_UPSCALE_API_KEY ||
+                  process.env.NIGHT_RENDER_UPSCALE_API_KEY ||
+                  env.NIGHT_RENDER_API_TOKEN ||
+                  process.env.NIGHT_RENDER_API_TOKEN;
+
+                if (!upscaleApiKey) {
+                  sendJson(response, 500, {
+                    error: "Missing RUNNINGHUB_UPSCALE_API_KEY",
+                  });
+                  return;
+                }
+
+                const result = await queryRunningHubUpscale(
+                  upscaleApiKey,
+                  taskId,
+                );
+
+                sendJson(response, 200, {
+                  taskId: result.taskId,
+                  status: result.status,
+                  imageUrl: result.imageUrl,
+                  outputText: result.outputText,
+                  ...(result.status === "error"
+                    ? { error: result.outputText }
+                    : {}),
+                });
+              } catch (error) {
+                sendJson(response, 500, {
+                  error:
+                    error instanceof Error
+                      ? error.message
+                      : "Image upscale status request failed",
+                });
+              }
+            },
+          );
+
           server.middlewares.use("/api/zerlum-image", async (request, response) => {
             if (request.method !== "POST") {
               sendJson(response, 405, { error: "Method not allowed" });
@@ -2511,6 +2662,7 @@ export default defineConfig(({ mode }) => {
               );
               const targetResolutionLabel = formatResolutionLabel(targetResolution);
               const aspectRatio = String(body.aspectRatio ?? "").trim();
+              const waitForUpscale = body.waitForUpscale === true;
               const imageEndpoint =
                 env.RUNNINGHUB_IMAGE_ENDPOINT ||
                 process.env.RUNNINGHUB_IMAGE_ENDPOINT ||
@@ -2583,8 +2735,48 @@ export default defineConfig(({ mode }) => {
                   return;
                 }
 
+                if (waitForUpscale) {
+                  try {
+                    const upscaled = await runRunningHubUpscale({
+                      apiKey: upscaleApiKey,
+                      webappId: upscaleWebappId,
+                      imageUrl: generated.imageUrl,
+                      targetResolution,
+                      configuredNodeInfo,
+                    });
+
+                    sendJson(response, 200, {
+                      imageUrl: upscaled.imageUrl,
+                      baseImageUrl: generated.imageUrl,
+                      outputText: `已通过 qweapi 生图接口生成，并通过放大接口处理到 ${targetResolutionLabel}。`,
+                      model: imageModel,
+                      provider: "qweapi",
+                      resolution: targetResolution,
+                      upscaled: true,
+                      taskIds: { upscale: upscaled.taskId },
+                    });
+                    return;
+                  } catch (upscaleError) {
+                    sendJson(response, 200, {
+                      imageUrl: generated.imageUrl,
+                      baseImageUrl: generated.imageUrl,
+                      outputText: `已通过 qweapi 生图接口生成，但 ${targetResolutionLabel} 放大接口未返回可用结果。`,
+                      model: imageModel,
+                      provider: "qweapi",
+                      resolution: targetResolution,
+                      upscaled: false,
+                      upscalePending: false,
+                      upscaleError:
+                        upscaleError instanceof Error
+                          ? upscaleError.message
+                          : "未知错误",
+                    });
+                    return;
+                  }
+                }
+
                 try {
-                  const upscaled = await runRunningHubUpscale({
+                  const submitted = await submitRunningHubUpscale({
                     apiKey: upscaleApiKey,
                     webappId: upscaleWebappId,
                     imageUrl: generated.imageUrl,
@@ -2593,30 +2785,31 @@ export default defineConfig(({ mode }) => {
                   });
 
                   sendJson(response, 200, {
-                    imageUrl: upscaled.imageUrl,
+                    imageUrl: generated.imageUrl,
                     baseImageUrl: generated.imageUrl,
-                    outputText: `已通过 qweapi 生图接口生成，并通过放大接口处理到 ${targetResolutionLabel}。`,
+                    outputText: `原图已生成，正在进行 ${targetResolutionLabel} 高清放大。`,
                     model: imageModel,
                     provider: "qweapi",
                     resolution: targetResolution,
-                    upscaled: true,
-                    taskIds: {
-                      upscale: upscaled.taskId,
-                    },
+                    upscaled: false,
+                    upscalePending: true,
+                    upscaleTaskId: submitted.taskId,
                   });
                   return;
                 } catch (upscaleError) {
                   sendJson(response, 200, {
                     imageUrl: generated.imageUrl,
-                    outputText: `已通过 qweapi 生图接口生成，但 ${targetResolutionLabel} 放大接口未返回可用结果：${
-                      upscaleError instanceof Error
-                        ? upscaleError.message
-                        : "未知错误"
-                    }`,
+                    baseImageUrl: generated.imageUrl,
+                    outputText: "原图已生成，高清放大任务未能启动。",
                     model: imageModel,
                     provider: "qweapi",
                     resolution: targetResolution,
                     upscaled: false,
+                    upscalePending: false,
+                    upscaleError:
+                      upscaleError instanceof Error
+                        ? upscaleError.message
+                        : "未知错误",
                   });
                   return;
                 }
@@ -2650,8 +2843,50 @@ export default defineConfig(({ mode }) => {
                 aspectRatio,
               });
 
+              if (waitForUpscale) {
+                try {
+                  const upscaled = await runRunningHubUpscale({
+                    apiKey: upscaleApiKey,
+                    webappId: upscaleWebappId,
+                    imageUrl: generated.imageUrl,
+                    targetResolution,
+                    configuredNodeInfo,
+                  });
+
+                  sendJson(response, 200, {
+                    imageUrl: upscaled.imageUrl,
+                    baseImageUrl: generated.imageUrl,
+                    outputText: `已按 1K 底图生成，并通过放大接口处理到 ${targetResolutionLabel}。`,
+                    model: runningHubDefaultImageModel,
+                    resolution: targetResolution,
+                    upscaled: true,
+                    taskIds: {
+                      image: generated.taskId,
+                      upscale: upscaled.taskId,
+                    },
+                  });
+                  return;
+                } catch (upscaleError) {
+                  sendJson(response, 200, {
+                    imageUrl: generated.imageUrl,
+                    baseImageUrl: generated.imageUrl,
+                    outputText: `已完成 1K 底图生成，但 ${targetResolutionLabel} 放大接口未返回可用结果。`,
+                    model: runningHubDefaultImageModel,
+                    resolution: targetResolution,
+                    upscaled: false,
+                    upscalePending: false,
+                    upscaleError:
+                      upscaleError instanceof Error
+                        ? upscaleError.message
+                        : "未知错误",
+                    taskIds: { image: generated.taskId },
+                  });
+                  return;
+                }
+              }
+
               try {
-                const upscaled = await runRunningHubUpscale({
+                const submitted = await submitRunningHubUpscale({
                   apiKey: upscaleApiKey,
                   webappId: upscaleWebappId,
                   imageUrl: generated.imageUrl,
@@ -2660,32 +2895,31 @@ export default defineConfig(({ mode }) => {
                 });
 
                 sendJson(response, 200, {
-                  imageUrl: upscaled.imageUrl,
+                  imageUrl: generated.imageUrl,
                   baseImageUrl: generated.imageUrl,
-                  outputText: `已按 1K 底图生成，并通过放大接口处理到 ${targetResolutionLabel}。`,
+                  outputText: `1K 原图已生成，正在进行 ${targetResolutionLabel} 高清放大。`,
                   model: runningHubDefaultImageModel,
                   resolution: targetResolution,
-                  upscaled: true,
-                  taskIds: {
-                    image: generated.taskId,
-                    upscale: upscaled.taskId,
-                  },
+                  upscaled: false,
+                  upscalePending: true,
+                  upscaleTaskId: submitted.taskId,
+                  taskIds: { image: generated.taskId },
                 });
                 return;
               } catch (upscaleError) {
                 sendJson(response, 200, {
                   imageUrl: generated.imageUrl,
-                  outputText: `已完成 1K 底图生成，但 ${targetResolutionLabel} 放大接口未返回可用结果：${
-                    upscaleError instanceof Error
-                      ? upscaleError.message
-                      : "未知错误"
-                  }`,
+                  baseImageUrl: generated.imageUrl,
+                  outputText: "1K 原图已生成，高清放大任务未能启动。",
                   model: runningHubDefaultImageModel,
                   resolution: targetResolution,
                   upscaled: false,
-                  taskIds: {
-                    image: generated.taskId,
-                  },
+                  upscalePending: false,
+                  upscaleError:
+                    upscaleError instanceof Error
+                      ? upscaleError.message
+                      : "未知错误",
+                  taskIds: { image: generated.taskId },
                 });
                 return;
               }

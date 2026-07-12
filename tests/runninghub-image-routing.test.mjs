@@ -122,6 +122,38 @@ test("qweapi canvas generation returns its image when RunningHub upscale is not 
   }
 });
 
+test("image generation returns the base image while RunningHub upscales asynchronously", () => {
+  for (const source of [configImageHandlerBlock, apiImageHandlerBlock]) {
+    assert.match(source, /const waitForUpscale = body\.waitForUpscale === true;/);
+    assert.match(
+      source,
+      /const submitted = await submitRunningHubUpscale\({[\s\S]*imageUrl: generated\.imageUrl,[\s\S]*targetResolution,[\s\S]*}\);/,
+    );
+    assert.match(source, /imageUrl: generated\.imageUrl,[\s\S]*baseImageUrl: generated\.imageUrl/);
+    assert.match(source, /upscalePending: true,[\s\S]*upscaleTaskId: submitted\.taskId/);
+    assert.match(source, /upscalePending: false,[\s\S]*upscaleError:/);
+  }
+});
+
+test("image upscale status performs one RunningHub query per request", () => {
+  for (const source of [configSource, apiSource]) {
+    assert.match(source, /async function queryRunningHubUpscale/);
+    assert.match(
+      source,
+      /const result = await queryRunningHubUpscale\(\s*upscaleApiKey,\s*taskId,?\s*\);/,
+    );
+  }
+  assert.match(
+    configSource,
+    /server\.middlewares\.use\(\s*"\/api\/zerlum-image-upscale-status"/,
+  );
+  assert.match(apiSource, /export async function handleZerlumImageUpscaleStatus/);
+  assert.match(
+    apiSource,
+    /const taskId = String\([\s\S]*body\.taskId \?\? getRequestQueryParam\(request, "taskId"\),[\s\S]*\)\.trim\(\);/,
+  );
+});
+
 test("canvas image generation supports adaptive source-image aspect ratio", () => {
   assert.match(appSource, /value: "adaptive", label: "自适应"/);
   assert.match(configSource, /function normalizeRunningHubImageAspectRatio/);

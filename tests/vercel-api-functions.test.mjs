@@ -10,6 +10,7 @@ test("production exposes Vercel functions for all app API routes", () => {
     "zerlum-agent",
     "zerlum-prompt",
     "zerlum-image",
+    "zerlum-image-upscale-status",
     "zerlum-video",
     "zerlum-video-status",
   ];
@@ -27,7 +28,7 @@ test("production exposes Vercel functions for all app API routes", () => {
 });
 
 test("Vercel route imports use explicit ESM extensions", () => {
-  ["zerlum-agent", "zerlum-prompt", "zerlum-image", "zerlum-video", "zerlum-video-status"].forEach((route) => {
+  ["zerlum-agent", "zerlum-prompt", "zerlum-image", "zerlum-image-upscale-status", "zerlum-video", "zerlum-video-status"].forEach((route) => {
     const source = readFileSync(join(root, "api", `${route}.ts`), "utf8");
 
     assert.match(source, /from\s+"\.\/_zerlum-server\.js"/);
@@ -88,7 +89,7 @@ test(
   () => {
   const functionsRoot = join(root, ".vercel", "output", "functions");
 
-  ["zerlum-agent", "zerlum-prompt", "zerlum-image", "zerlum-video", "zerlum-video-status"].forEach((route) => {
+  ["zerlum-agent", "zerlum-prompt", "zerlum-image", "zerlum-image-upscale-status", "zerlum-video", "zerlum-video-status"].forEach((route) => {
     assert.equal(
       existsSync(join(functionsRoot, "api", `${route}.func`)),
       true,

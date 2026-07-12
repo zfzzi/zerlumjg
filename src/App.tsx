@@ -465,10 +465,6 @@ function extractAgentStreamError(data: string) {
   return "";
 }
 
-function canReuseCanvasPromptForImageGeneration(promptSource?: CanvasPromptSource) {
-  return promptSource === "generated";
-}
-
 function shouldLetEmbeddedInputHandleWheel(target: EventTarget | null) {
   return (
     target instanceof HTMLElement &&
@@ -6309,7 +6305,7 @@ function UnifiedCanvasView({
       status: "loading",
       progress: 16,
       createdAt: formatUploadTime(),
-      outputText: "正在生成提示词...",
+      outputText: "生成原图中",
       sourceImageUrl: primaryImageUrl,
       sourceTitle: canvasImageReferences[0]?.title,
     });
@@ -6323,24 +6319,13 @@ function UnifiedCanvasView({
         throw new Error("请先上传主图或连接参考图，再生成图片。");
       }
 
-      const shouldUsePromptDirectly = canReuseCanvasPromptForImageGeneration(node.promptSource);
-      const finalPrompt = shouldUsePromptDirectly
-        ? userPrompt
-        : await requestCanvasGeneratedPrompt({
-            node,
-            images: promptImages,
-            fallbackPrompt: userPrompt,
-          });
-
-      if (!shouldUsePromptDirectly) {
-        updateCanvasNodePrompt(node.id, finalPrompt, "generated");
-      }
+      const finalPrompt = userPrompt;
 
       updateCanvasVersion(node.id, versionId, (version) => ({
         ...version,
         prompt: finalPrompt,
         progress: Math.max(version.progress, 24),
-        outputText: "正在生成图片...",
+        outputText: "生成原图中",
       }));
 
       const response = await fetch("/api/zerlum-image", {
@@ -6392,10 +6377,15 @@ function UnifiedCanvasView({
           aspectRatio: targetAspectRatio,
           imageCount: targetImageCount,
           count: Number.parseInt(targetImageCount, 10) || 1,
+          waitForUpscale: false,
         }),
       });
       const payload = (await response.json()) as {
         imageUrl?: string;
+        baseImageUrl?: string;
+        upscalePending?: boolean;
+        upscaleTaskId?: string;
+        upscaleError?: string;
         outputText?: string;
         error?: string;
       };
@@ -6418,13 +6408,29 @@ function UnifiedCanvasView({
       updateCanvasVersion(node.id, versionId, (version) => ({
         ...version,
         url: payload.imageUrl ?? "",
-        status: "done",
-        progress: 100,
-        outputText: payload.outputText || "生成完成",
+        status: payload.upscaleTaskId ? "submitted" : "done",
+        progress: payload.upscaleTaskId ? 72 : 100,
+        taskId: payload.upscaleTaskId,
+        outputText: payload.upscaleTaskId
+          ? "高清放大中"
+          : payload.upscaleError
+            ? `原图可用，高清放大未完成：${payload.upscaleError}`
+            : payload.outputText || "生成完成",
         label: `${targetResolution} · ${targetAspectRatio} · ${formatUploadTime()}`,
         width,
         height,
       }));
+
+      if (payload.upscaleTaskId) {
+        void pollCanvasImageUpscale({
+          nodeId: node.id,
+          versionId,
+          taskId: payload.upscaleTaskId,
+          baseImageUrl: payload.baseImageUrl || payload.imageUrl,
+          targetResolution,
+          targetAspectRatio,
+        });
+      }
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "图片生成失败，请稍后再试。";
@@ -6434,6 +6440,99 @@ function UnifiedCanvasView({
         status: "error",
         progress: 6,
         outputText: message,
+      }));
+    }
+  }
+
+  async function pollCanvasImageUpscale({
+    nodeId,
+    versionId,
+    taskId,
+    baseImageUrl,
+    targetResolution,
+    targetAspectRatio,
+  }: {
+    nodeId: string;
+    versionId: string;
+    taskId: string;
+    baseImageUrl: string;
+    targetResolution: string;
+    targetAspectRatio: string;
+  }) {
+    const deadline = Date.now() + CANVAS_IMAGE_UPSCALE_POLL_TIMEOUT_MS;
+
+    try {
+      while (Date.now() < deadline) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, CANVAS_IMAGE_UPSCALE_POLL_INTERVAL_MS);
+        });
+
+        const response = await fetch(
+          `/api/zerlum-image-upscale-status?taskId=${encodeURIComponent(taskId)}`,
+        );
+        const rawText = await response.text();
+        let payload: {
+          status?: string;
+          imageUrl?: string;
+          outputText?: string;
+          error?: string;
+        } = {};
+
+        if (rawText) {
+          try {
+            payload = JSON.parse(rawText) as typeof payload;
+          } catch {
+            payload = { error: rawText };
+          }
+        }
+
+        if (!response.ok || payload.status === "error") {
+          throw new Error(
+            payload.error || payload.outputText || "高清放大失败",
+          );
+        }
+
+        if (payload.status !== "done" || !payload.imageUrl) {
+          continue;
+        }
+
+        let width = 16;
+        let height = 9;
+
+        try {
+          const image = await loadImageSource(payload.imageUrl);
+          width = image.naturalWidth || width;
+          height = image.naturalHeight || height;
+        } catch {
+          // The completed image remains usable even if its dimensions cannot be read.
+        }
+
+        updateCanvasVersion(nodeId, versionId, (version) => ({
+          ...version,
+          url: payload.imageUrl ?? baseImageUrl,
+          status: "done",
+          progress: 100,
+          taskId: undefined,
+          outputText: payload.outputText || "高清放大完成",
+          label: `${targetResolution} · ${targetAspectRatio} · ${formatUploadTime()}`,
+          width,
+          height,
+        }));
+        return;
+      }
+
+      throw new Error("高清放大等待超时");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "高清放大未完成";
+
+      updateCanvasVersion(nodeId, versionId, (version) => ({
+        ...version,
+        url: version.url || baseImageUrl,
+        status: "done",
+        progress: 100,
+        taskId: undefined,
+        outputText: `原图可用，高清放大未完成：${message}`,
       }));
     }
   }
@@ -7347,9 +7446,13 @@ function CanvasNodeCard({
   const generationDisabled = !canGenerate || isGenerating || !node.prompt.trim();
   const nodeMeasure = getCanvasNodeMeasure(node, version);
   const statusLabel = isGenerating
-    ? `${videoStatusLabels[(version?.status ?? "loading") as VideoGenerationStatus] ?? "生成中"} · ${
-        version?.progress ?? 0
-      }%`
+    ? node.kind === "image"
+      ? version?.url && version.taskId
+        ? "高清放大中"
+        : "生成原图中"
+      : `${videoStatusLabels[(version?.status ?? "loading") as VideoGenerationStatus] ?? "生成中"} · ${
+          version?.progress ?? 0
+        }%`
     : version
       ? version.prompt === "本地上传"
         ? "本地素材"
@@ -7467,7 +7570,7 @@ function CanvasNodeCard({
             {statusLabel}
           </span>
         </div>
-        {version && version.status !== "done" && (
+        {version && version.status !== "done" && node.kind === "video" && (
           <div
             className="video-generation-progress"
             role="progressbar"
@@ -7919,6 +8022,8 @@ function getVideoEstimatedWaitMs(duration: string) {
 
 const VIDEO_STATUS_POLL_INTERVAL_MS = 5_000;
 const VIDEO_STATUS_POLL_TIMEOUT_MS = 20 * 60_000;
+const CANVAS_IMAGE_UPSCALE_POLL_INTERVAL_MS = 3_000;
+const CANVAS_IMAGE_UPSCALE_POLL_TIMEOUT_MS = 5 * 60_000;
 
 function isVideoDoneStatus(status: string) {
   return /done|success|succeed|completed|finish|finished|已完成|成功/i.test(status);

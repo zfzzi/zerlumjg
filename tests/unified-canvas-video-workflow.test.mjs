@@ -429,7 +429,7 @@ test("image nodes generate prompts from canvas images without reading zerlum age
   assert.match(stylesSource, /\.canvas-node-prompt-generate-button\s*{/);
 });
 
-test("generated image prompts are marked so sending can skip prompt regeneration", () => {
+test("explicitly generated image prompts stay marked without implicit regeneration", () => {
   assert.match(appSource, /type CanvasPromptSource = "manual" \| "generated";/);
   assert.doesNotMatch(appSource, /promptSource === "agent"/);
   assert.doesNotMatch(appSource, /updateCanvasNodePrompt\([^)]*,\s*[^)]*,\s*"agent"\)/);
@@ -439,17 +439,8 @@ test("generated image prompts are marked so sending can skip prompt regeneration
     /function updateCanvasNodePrompt\(\s*nodeId: string,\s*prompt: string,\s*promptSource: CanvasPromptSource = "manual",\s*\)/,
   );
   assert.match(manualPromptFunction, /updateCanvasNodePrompt\(node\.id, finalPrompt, "generated"\);/);
-  assert.match(appSource, /function canReuseCanvasPromptForImageGeneration/);
-  assert.match(appSource, /return promptSource === "generated";/);
-  assert.match(imageGenerationFunction, /const shouldUsePromptDirectly = canReuseCanvasPromptForImageGeneration\(node\.promptSource\);/);
-  assert.match(
-    imageGenerationFunction,
-    /const finalPrompt = shouldUsePromptDirectly\s*\?\s*userPrompt\s*:\s*await requestCanvasGeneratedPrompt\(\{[\s\S]*node,[\s\S]*images: promptImages,[\s\S]*fallbackPrompt: userPrompt,[\s\S]*\}\);/,
-  );
-  assert.match(
-    imageGenerationFunction,
-    /if \(!shouldUsePromptDirectly\) \{[\s\S]*updateCanvasNodePrompt\(node\.id, finalPrompt, "generated"\);[\s\S]*\}/,
-  );
+  assert.doesNotMatch(imageGenerationFunction, /requestCanvasGeneratedPrompt/);
+  assert.match(imageGenerationFunction, /const finalPrompt = userPrompt;/);
 });
 
 test("manual image prompt edits opt back into prompt regeneration", () => {
@@ -546,21 +537,24 @@ test("generated image nodes keep regeneration controls and use incoming referenc
   assert.match(appSource, /sourceTitle: canvasImageReferences\[0\]\?\.title,/);
 });
 
-test("image generation first refines the user prompt with source and reference images", () => {
+test("image generation uses the current prompt and starts background upscale", () => {
   assert.match(appSource, /async function requestCanvasGeneratedPrompt/);
-  assert.match(
-    imageGenerationFunction,
-    /const finalPrompt = shouldUsePromptDirectly\s*\?\s*userPrompt\s*:\s*await requestCanvasGeneratedPrompt\(\{[\s\S]*node,[\s\S]*images: promptImages,[\s\S]*fallbackPrompt: userPrompt,[\s\S]*\}\);/,
-  );
+  assert.doesNotMatch(imageGenerationFunction, /requestCanvasGeneratedPrompt/);
+  assert.match(imageGenerationFunction, /const finalPrompt = userPrompt;/);
   assert.match(
     imageGenerationFunction,
     /const promptImages = await collectCanvasPromptImages\(node,\s*\{[\s\S]*includeCurrentImage: false,[\s\S]*\}\);/,
   );
   assert.match(appSource, /currentPrompt: fallbackPrompt,/);
   assert.match(manualPromptFunction, /updateCanvasNodePrompt\(node\.id, finalPrompt, "generated"\);/);
-  assert.match(imageGenerationFunction, /updateCanvasNodePrompt\(node\.id, finalPrompt, "generated"\);/);
   assert.match(imageGenerationFunction, /prompt: finalPrompt,/);
-  assert.match(imageGenerationFunction, /outputText: "正在生成提示词..."/);
+  assert.match(imageGenerationFunction, /outputText: "生成原图中"/);
+  assert.match(imageGenerationFunction, /waitForUpscale: false,/);
+  assert.match(imageGenerationFunction, /upscaleTaskId\?: string;/);
+  assert.match(imageGenerationFunction, /pollCanvasImageUpscale\(\{/);
+  assert.match(appSource, /\/api\/zerlum-image-upscale-status\?taskId=/);
+  assert.match(canvasNodeCardSource, /"生成原图中"/);
+  assert.match(canvasNodeCardSource, /"高清放大中"/);
   const imageGenerationRequest = appSource.match(
     /const response = await fetch\("\/api\/zerlum-image"[\s\S]*?const payload =/,
   )?.[0];
