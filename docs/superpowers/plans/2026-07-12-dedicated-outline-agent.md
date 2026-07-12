@@ -183,10 +183,10 @@ const projectBrief = [
   `项目地点：${project.location || "未填写"}`,
   `设计阶段：${project.designStage || "未填写"}`,
   `客户或委托方：${project.client || "未填写"}`,
-  `项目目标：${project.goal || "未填写"}`,
-  `使用人群：${project.audience || "未填写"}`,
-  `场地范围：${project.siteScope || "未填写"}`,
-  `已知限制：${project.constraints || "未填写"}`,
+  `项目目标：${project.brief.goals || "未填写"}`,
+  `使用人群：${project.brief.users || "未填写"}`,
+  `场地范围：${project.brief.siteScope || "未填写"}`,
+  `已知限制：${project.brief.constraints || "未填写"}`,
 ].join("\n");
 ```
 
@@ -227,10 +227,10 @@ const hasProjectBriefInput = Boolean(
   (project.name && project.name !== "未命名景观项目") ||
     project.location.trim() ||
     project.client.trim() ||
-    project.goal.trim() ||
-    project.audience.trim() ||
-    project.siteScope.trim() ||
-    project.constraints.trim(),
+    project.brief.goals.trim() ||
+    project.brief.users.trim() ||
+    project.brief.siteScope.trim() ||
+    project.brief.constraints.trim(),
 );
 
 const hasOutlineInputs =
