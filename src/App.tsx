@@ -9156,6 +9156,17 @@ function TextView({
   }
 
   function buildOutlineAgentContext(userRequest: string) {
+    const projectBrief = [
+      `项目名称：${project.name || "未填写"}`,
+      `项目类型：${project.type || "未填写"}`,
+      `项目地点：${project.location || "未填写"}`,
+      `设计阶段：${project.designStage || "未填写"}`,
+      `客户或委托方：${project.client || "未填写"}`,
+      `项目目标：${project.brief.goals || "未填写"}`,
+      `使用人群：${project.brief.users || "未填写"}`,
+      `场地范围：${project.brief.siteScope || "未填写"}`,
+      `已知限制：${project.brief.constraints || "未填写"}`,
+    ].join("\n");
     const currentProjectMaterials = materials.slice(0, 12);
     const materialSummary = currentProjectMaterials.length
       ? currentProjectMaterials
@@ -9179,16 +9190,14 @@ function TextView({
           })
           .join("\n\n")
       : "暂无用户提交资料。";
-    const agentOutputSummary = agentMessages
-      .filter(
-        (message) =>
-          message.role === "assistant" &&
-          message.status !== "error" &&
-          message.text.trim(),
+    const agentConversationSummary = agentMessages
+      .filter((item) => item.status !== "error" && item.text.trim())
+      .slice(-12)
+      .map(
+        (item, index) =>
+          `${index + 1}. ${item.role === "user" ? "用户" : "Zerlum Agent"}：${item.text.trim().slice(0, 3000)}`,
       )
-      .slice(-8)
-      .map((message, index) => `${index + 1}. ${message.text.trim().slice(0, 3000)}`)
-      .join("\n\n") || "暂无 Zerlum Agent 聊天输出。";
+      .join("\n\n") || "暂无有效对话。";
     const canvasImageSummary = canvasGeneratedImages.length
       ? canvasGeneratedImages
           .slice(0, 8)
@@ -9198,19 +9207,19 @@ function TextView({
 
     return [
       "你是 Zerlum 景观设计系统的大纲生成模块。",
-      "对外说明身份时，只说“我是 Zerlum 景观设计系统”。",
       "项目依据只来自用户提交的项目简报与场地资料、Zerlum Agent 已确认结论和画布方案成果。",
       "使用 Landscape Skill 组织景观设计方法、页面角色和质量检查。",
       "不要调用或引用任何 agent.md、数据库或联网检索结果。",
       "Landscape Skill 只能作为专业方法约束，不能当作项目事实来源。",
       "不要读取或引用平台页面信息、项目卡片字段、导航状态或任何未显式传入的页面内容。",
-      "如果已收到任一来源，就只根据这些显式输入生成简洁大纲。",
+      "如果已收到任一来源，就只根据这些显式输入生成排版规范与大纲。",
       "如果目前没有收到项目简报与场地资料、Agent 已确认结论或画布方案成果，就回复：目前没有收到可用于生成大纲的资料。",
-      "先用一句话说明身份和信息来源，再输出大纲；不要解释推理过程，不要输出正文示例。",
-      "版式默认 16:9 横屏。",
-      "大纲开头必须先写清楚排版风格和字体要求。",
+      "只输出结构化 Markdown，不输出身份说明、正文示例、推理过程、引用清单或额外解释。",
+      "输出必须以【整套排版风格】开头，并确定唯一一套整案风格，不要提供多个候选路线。",
+      "整套排版风格必须写明：16:9 横屏、风格名称与依据、主色/辅助色/强调色及比例、中文与西文字体方向、标题与正文字级、网格/页边距/留白/对齐、图片处理、图表/图标/分析图语言。",
+      "排版风格之后，每页使用“第 N 页：页面标题”作为标题。",
+      "每页必须写明：页面类型、本页目的、关键信息、主要视觉元素、版面位置与图文层级、画布生成图使用方式、资料依据/设计判断/待复核项。",
       "先判断景观项目类型、设计阶段、场地问题、目标人群和显式资料里可推导的表达基调。",
-      "给出 2-3 条视觉路线，并选择最适合本项目的一条作为整套方案基调。",
       "不要让整套方案全篇都放画布生成效果图。",
       "效果图页只用于封面、设计方向、重点节点、关键体验或前后对比等必要页面。",
       "其余页面应使用场地分析、结构图、游线图、植物板、材料板、节点分析或运营时间线等页面类型。",
@@ -9219,16 +9228,19 @@ function TextView({
       "每页必须标注页面类型、主要视觉元素、是否使用画布生成图以及使用方式。",
       "随后逐页写清楚每页的排版内容、版面位置和图文层级。",
       "",
+      "【左侧项目简报】",
+      projectBrief,
+      "",
       "【已上传项目资料清单】",
       materialSummary,
       "",
-      "【用户提交的项目简报与场地资料】",
+      "【文本交付区上传资料】",
       materialContent,
       "",
-      "【Zerlum Agent 已确认结论】",
-      agentOutputSummary,
+      "【Zerlum Agent 有效对话】",
+      agentConversationSummary,
       "",
-      "【画布方案成果】",
+      "【方案画布成果】",
       canvasImageSummary,
       "",
       `用户原始要求：${userRequest}`,
@@ -9390,18 +9402,28 @@ function TextView({
       status: "streaming",
     };
     const agentPrompt = buildOutlineAgentContext(message);
+    const hasProjectBriefInput = Boolean(
+      (project.name && project.name !== "未命名景观项目") ||
+        project.location.trim() ||
+        project.client.trim() ||
+        project.brief.goals.trim() ||
+        project.brief.users.trim() ||
+        project.brief.siteScope.trim() ||
+        project.brief.constraints.trim(),
+    );
     const hasOutlineInputs =
+      hasProjectBriefInput ||
       materials.length > 0 ||
       agentMessages.some(
         (item) =>
-          item.role === "assistant" &&
           item.status !== "error" &&
           item.text.trim(),
       ) ||
-      canvasGeneratedImages.some((image) => image.imageUrl.trim());
+      canvasGeneratedImages.some((image) => image.imageUrl.trim()) ||
+      outline.trim();
+    const previousOutline = outline.trim();
 
     setDocumentInput("");
-    setOutline("");
     setDocumentOutput("");
     setDocumentOutputPages([]);
 
@@ -9429,8 +9451,12 @@ function TextView({
       await requestDocumentAgent({
         message: agentPrompt,
         assistantId,
-        onText: setOutline,
-        finalFallback: "方案 Agent 暂时没有返回可用大纲。",
+        onText: (text) => {
+          if (text.trim()) {
+            setOutline(text);
+          }
+        },
+        finalFallback: previousOutline || "方案 Agent 暂时没有返回可用大纲。",
         agentTask: "outline",
         images: canvasGeneratedImages,
       });
