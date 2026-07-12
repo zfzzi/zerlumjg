@@ -39,13 +39,17 @@ const apiBuildAgentPromptBlock = apiServerSource.slice(
 
 test("outline prompt stays concise, landscape-specific, and material-driven", () => {
   assert.match(outlinePromptBlock, /你是 Zerlum 景观设计系统的大纲生成模块。/);
-  assert.match(outlinePromptBlock, /对外说明身份时，只说“我是 Zerlum 景观设计系统”。/);
   assert.match(outlinePromptBlock, /项目依据只来自用户提交的项目简报与场地资料、Zerlum Agent 已确认结论和画布方案成果/);
   assert.match(outlinePromptBlock, /使用 Landscape Skill 组织景观设计方法、页面角色和质量检查/);
   assert.match(outlinePromptBlock, /Landscape Skill 只能作为专业方法约束，不能当作项目事实来源/);
-  assert.match(outlinePromptBlock, /【用户提交的项目简报与场地资料】/);
-  assert.match(outlinePromptBlock, /【Zerlum Agent 已确认结论】/);
-  assert.match(outlinePromptBlock, /【画布方案成果】/);
+  assert.match(outlinePromptBlock, /【左侧项目简报】/);
+  assert.match(outlinePromptBlock, /project\.brief\.goals/);
+  assert.match(outlinePromptBlock, /project\.brief\.users/);
+  assert.match(outlinePromptBlock, /【文本交付区上传资料】/);
+  assert.match(outlinePromptBlock, /【Zerlum Agent 有效对话】/);
+  assert.match(outlinePromptBlock, /item\.role === "user" \? "用户" : "Zerlum Agent"/);
+  assert.match(outlinePromptBlock, /【方案画布成果】/);
+  assert.match(outlinePromptBlock, /【当前已有大纲】/);
   assert.match(outlinePromptBlock, /场地分析、结构图、游线图、植物板、材料板、节点分析或运营时间线/);
   assert.match(outlinePromptBlock, /项目事实、设计判断与待复核项/);
   assert.match(appSource, /agentMessages=\{agentMessages\}/);
@@ -55,8 +59,29 @@ test("outline prompt stays concise, landscape-specific, and material-driven", ()
   assert.doesNotMatch(requestDocumentAgentBlock, /\n\s*project:/);
 });
 
+test("outline selects one shared layout style and paginates explicit sources", () => {
+  for (const backendBlock of [outlinePromptBlock, outlineProxyBlock, apiBuildAgentPromptBlock]) {
+    assert.match(backendBlock, /【整套排版风格】/);
+    assert.match(backendBlock, /主色[、/]辅助色[、/]强调色/);
+    assert.match(backendBlock, /网格[、/]页边距[、/]留白[、/]对齐/);
+    assert.match(backendBlock, /第 N 页：页面标题/);
+    assert.match(backendBlock, /页面类型、本页目的、关键信息、主要视觉元素/);
+    assert.doesNotMatch(backendBlock, /给出 2-3 条视觉路线/);
+    assert.doesNotMatch(backendBlock, /先用一句话说明身份/);
+  }
+});
+
+test("outline requires project evidence beyond the current instruction", () => {
+  assert.match(outlineSubmitBlock, /const hasProjectBriefInput = Boolean/);
+  assert.match(outlineSubmitBlock, /project\.brief\.goals\.trim\(\)/);
+  assert.match(outlineSubmitBlock, /project\.brief\.constraints\.trim\(\)/);
+  assert.match(
+    outlineSubmitBlock,
+    /const hasOutlineInputs =\s*hasProjectBriefInput \|\|[\s\S]*materials\.length > 0 \|\|[\s\S]*agentMessages\.some[\s\S]*canvasGeneratedImages\.some[\s\S]*outline\.trim\(\)/,
+  );
+});
+
 test("outline proxy applies the same landscape delivery contract", () => {
-  assert.match(outlineProxyBlock, /说明身份时，只说“我是 Zerlum 景观设计系统”。/);
   assert.match(outlineProxyBlock, /使用 Landscape Skill 组织景观设计方法、页面角色和质量检查。/);
   assert.match(outlineProxyBlock, /Landscape Skill 不能当作项目事实来源。/);
   assert.match(outlineProxyBlock, /先判断景观项目类型、设计阶段、场地问题、目标人群/);

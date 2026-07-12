@@ -8,6 +8,10 @@ const apiServerSource = readFileSync(
   "utf8",
 );
 const appSource = readFileSync(new URL("../src/App.tsx", import.meta.url), "utf8");
+const envExampleSource = readFileSync(
+  new URL("../.env.example", import.meta.url),
+  "utf8",
+);
 const agentProxyBlock = source.slice(
   source.indexOf('server.middlewares.use("/api/zerlum-agent"'),
   source.indexOf('server.middlewares.use("/api/zerlum-image"'),
@@ -65,7 +69,7 @@ test("agent proxy routes main and outline to Chat Completions and document outpu
   );
   assert.match(
     agentProxyBlock,
-    /const openAiChatEndpoint = resolveOpenAiChatEndpoint\(env\);/,
+    /const openAiChatEndpoint = resolveOpenAiChatEndpoint\(\s*env,\s*isOutlineTask \? "OPENAI_OUTLINE_BASE_URL" : "OPENAI_BASE_URL",\s*\);/,
   );
   assert.match(
     agentProxyBlock,
@@ -123,6 +127,26 @@ test("canvas visual agent uses the evidence-led landscape design frame", () => {
   assert.match(appSource, /保结构优化、概念改造、局部替换、方向变体、季节时间变化、自由生成或视频漫游/);
   assert.match(appSource, /用户明确要求、项目资料和画布显式关系优先/);
   assert.doesNotMatch(appSource, /夜景照明效果图提示词/);
+});
+
+test("outline uses a dedicated OpenAI-compatible channel with shared fallback", () => {
+  assert.match(
+    agentProxyBlock,
+    /isOutlineTask\s*\?\s*env\.OPENAI_OUTLINE_API_KEY \|\|\s*process\.env\.OPENAI_OUTLINE_API_KEY \|\|\s*env\.OPENAI_API_KEY \|\|\s*process\.env\.OPENAI_API_KEY/,
+  );
+  assert.match(
+    apiAgentHandlerBlock,
+    /isOutlineTask\s*\?\s*envValue\(\s*"OPENAI_OUTLINE_API_KEY",\s*"OPENAI_API_KEY"/,
+  );
+  for (const backendBlock of [agentProxyBlock, apiAgentHandlerBlock]) {
+    assert.match(backendBlock, /OPENAI_OUTLINE_BASE_URL/);
+    assert.match(backendBlock, /OPENAI_OUTLINE_MODEL/);
+  }
+  assert.match(envExampleSource, /^OPENAI_OUTLINE_API_KEY=$/m);
+  assert.match(
+    envExampleSource,
+    /^OPENAI_OUTLINE_BASE_URL=https:\/\/qweapi\.com$/m,
+  );
 });
 
 test("canvas prompt proxy produces evidence-led landscape visualization prompts", () => {
@@ -272,7 +296,7 @@ test("agent proxy forwards microphone audio as Ark Responses input audio", () =>
 });
 
 test("environment template documents Agent, outline, and document routes", () => {
-  const localEnv = readFileSync(new URL("../.env.example", import.meta.url), "utf8");
+  const localEnv = envExampleSource;
 
   assert.match(localEnv, /^OPENAI_API_KEY=$/m);
   assert.match(localEnv, /^OPENAI_BASE_URL=https:\/\/qweapi\.com$/m);
@@ -280,6 +304,8 @@ test("environment template documents Agent, outline, and document routes", () =>
   assert.match(localEnv, /^OPENAI_PROMPT_BASE_URL=https:\/\/qweapi\.com$/m);
   assert.match(localEnv, /^OPENAI_PROMPT_MODEL=gpt-5\.5$/m);
   assert.match(localEnv, /^OPENAI_AGENT_MODEL=gpt-5\.5$/m);
+  assert.match(localEnv, /^OPENAI_OUTLINE_API_KEY=$/m);
+  assert.match(localEnv, /^OPENAI_OUTLINE_BASE_URL=https:\/\/qweapi\.com$/m);
   assert.match(localEnv, /^OPENAI_OUTLINE_MODEL=gpt-5\.5$/m);
   assert.match(localEnv, /^OPENAI_DOCUMENT_OUTPUT_API_KEY=$/m);
   assert.match(localEnv, /^OPENAI_DOCUMENT_OUTPUT_BASE_URL=https:\/\/qweapi\.com$/m);
