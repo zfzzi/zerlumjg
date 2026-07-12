@@ -64,6 +64,19 @@ test("Vercel image function normalizes relative RunningHub endpoints", () => {
   assert.match(serverSource, /fetch\(resolveRunningHubEndpoint\(endpoint\),/);
 });
 
+test("Vercel prompt images keep one typed shape for string and object inputs", () => {
+  const serverSource = readFileSync(join(root, "api", "_zerlum-server.ts"), "utf8");
+  const normalizeImagesBlock = serverSource.slice(
+    serverSource.indexOf("function normalizeAgentImages"),
+    serverSource.indexOf("function normalizeAgentAudio"),
+  );
+
+  assert.match(
+    normalizeImagesBlock,
+    /typeof item === "string"[\s\S]*imageUrl: item,[\s\S]*label: "",[\s\S]*nodeId: "",[\s\S]*edgeId: "",[\s\S]*targetNodeId: "",[\s\S]*role: "",[\s\S]*mentionToken: "",[\s\S]*mentioned: false/,
+  );
+});
+
 test(
   "Vercel build produced API function bundles",
   {

@@ -856,7 +856,18 @@ function normalizeAgentImages(value: unknown) {
   return value
     .flatMap((item) => {
       if (typeof item === "string") {
-        return [{ imageUrl: item, label: "" }];
+        return [
+          {
+            imageUrl: item,
+            label: "",
+            nodeId: "",
+            edgeId: "",
+            targetNodeId: "",
+            role: "",
+            mentionToken: "",
+            mentioned: false,
+          },
+        ];
       }
 
       if (!item || typeof item !== "object") {
