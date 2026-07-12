@@ -305,6 +305,11 @@ const AGENT_IMAGE_MAX_SIDE = 1280;
 const AGENT_IMAGE_START_QUALITY = 0.82;
 const AGENT_IMAGE_MIN_QUALITY = 0.5;
 const AGENT_MESSAGE_COLLAPSE_LENGTH = 1200;
+const OUTLINE_MATERIAL_TEXT_LIMIT = 12_000;
+const OUTLINE_DATA_IMAGE_LIMIT = 2;
+const OUTLINE_REMOTE_IMAGE_LIMIT = 8;
+const OUTLINE_IMAGE_MAX_BYTES = 600_000;
+const OUTLINE_REQUEST_MAX_BYTES = 3_000_000;
 const CANVAS_VIDEO_UPLOAD_MAX_MB = 20;
 const CANVAS_VIDEO_UPLOAD_MAX_BYTES = CANVAS_VIDEO_UPLOAD_MAX_MB * 1024 * 1024;
 const canvasZoomMin = 0.35;
@@ -1433,21 +1438,27 @@ async function imageUrlToDataUrl(imageUrl: string) {
   });
 }
 
-async function compressImageForAgentApi(imageUrl: string) {
+async function compressImageForAgentApi(
+  imageUrl: string,
+  options: { maxBytes?: number; maxSide?: number } = {},
+) {
+  const maxBytes = options.maxBytes ?? AGENT_IMAGE_MAX_BYTES;
+  const targetMaxSide = options.maxSide ?? AGENT_IMAGE_MAX_SIDE;
+
   if (!imageUrl.startsWith("data:image/")) {
     return imageUrl;
   }
 
-  if (estimateDataUrlBytes(imageUrl) <= AGENT_IMAGE_MAX_BYTES) {
+  if (estimateDataUrlBytes(imageUrl) <= maxBytes) {
     return imageUrl;
   }
 
   const image = await loadImageSource(imageUrl);
   const sourceWidth = image.naturalWidth || image.width;
   const sourceHeight = image.naturalHeight || image.height;
-  const maxSide = Math.max(sourceWidth, sourceHeight);
+  const sourceMaxSide = Math.max(sourceWidth, sourceHeight);
   const scale =
-    maxSide > AGENT_IMAGE_MAX_SIDE ? AGENT_IMAGE_MAX_SIDE / maxSide : 1;
+    sourceMaxSide > targetMaxSide ? targetMaxSide / sourceMaxSide : 1;
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(sourceWidth * scale));
   canvas.height = Math.max(1, Math.round(sourceHeight * scale));
@@ -1466,7 +1477,7 @@ async function compressImageForAgentApi(imageUrl: string) {
   let output = canvas.toDataURL("image/jpeg", quality);
 
   while (
-    estimateDataUrlBytes(output) > AGENT_IMAGE_MAX_BYTES &&
+    estimateDataUrlBytes(output) > maxBytes &&
     quality > AGENT_IMAGE_MIN_QUALITY
   ) {
     quality = Math.max(AGENT_IMAGE_MIN_QUALITY, quality - 0.1);
@@ -1474,6 +1485,49 @@ async function compressImageForAgentApi(imageUrl: string) {
   }
 
   return output;
+}
+
+async function prepareOutlineImagesForRequest(
+  materials: ProjectMaterial[],
+  canvasImages: CanvasGeneratedImage[],
+) {
+  const materialImages = materials
+    .filter((item) => item.sourceDataUrl?.startsWith("data:image/"))
+    .map((item) => ({
+      imageUrl: item.sourceDataUrl ?? "",
+      label: item.name,
+    }));
+  const candidates = [...materialImages, ...canvasImages];
+  const remoteImages = candidates
+    .filter((item) => /^https?:\/\//i.test(item.imageUrl))
+    .slice(0, OUTLINE_REMOTE_IMAGE_LIMIT);
+  const dataImages = candidates
+    .filter((item) => item.imageUrl.startsWith("data:image/"))
+    .slice(0, OUTLINE_DATA_IMAGE_LIMIT);
+  const compressedImages = await Promise.all(
+    dataImages.map(async (item) => {
+      try {
+        const imageUrl = await compressImageForAgentApi(item.imageUrl, {
+          maxBytes: OUTLINE_IMAGE_MAX_BYTES,
+        });
+
+        if (estimateDataUrlBytes(imageUrl) > OUTLINE_IMAGE_MAX_BYTES) {
+          return null;
+        }
+
+        return { ...item, imageUrl };
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  return [
+    ...remoteImages,
+    ...compressedImages.filter(
+      (item): item is CanvasGeneratedImage => item !== null,
+    ),
+  ];
 }
 
 async function resolveImageUrlForAgentApi(imageUrl?: string) {
@@ -2836,6 +2890,15 @@ function AgentWorkspaceContent({
         </div>
       </aside>
     </AgentViewLayout>
+  );
+}
+
+function prepareOutlineMaterialsForRequest(materials: ProjectMaterial[]) {
+  return materials.slice(0, 12).map(
+    ({ sourceDataUrl, sourceText, ...material }) => ({
+      ...material,
+      sourceText: sourceText?.slice(0, OUTLINE_MATERIAL_TEXT_LIMIT),
+    }),
   );
 }
 
@@ -9176,20 +9239,6 @@ function TextView({
           )
           .join("\n")
       : "暂无用户提交资料。";
-    const materialContent = currentProjectMaterials.length
-      ? currentProjectMaterials
-          .map((material, index) => {
-            const sourceText = material.sourceText?.trim();
-            const sourceNote = sourceText
-              ? `\n  源文本摘录：${sourceText.slice(0, 6000)}`
-              : material.sourceDataUrl?.startsWith("data:image/")
-                ? "\n  图片资料：已作为用户提交资料上传，请结合可见画面判断。"
-                : "\n  暂无可直接读取的源文本。";
-
-            return `${index + 1}. ${material.name}${sourceNote}`;
-          })
-          .join("\n\n")
-      : "暂无用户提交资料。";
     const agentConversationSummary = agentMessages
       .filter((item) => item.status !== "error" && item.text.trim())
       .slice(-12)
@@ -9234,9 +9283,6 @@ function TextView({
       "【已上传项目资料清单】",
       materialSummary,
       "",
-      "【文本交付区上传资料】",
-      materialContent,
-      "",
       "【Zerlum Agent 有效对话】",
       agentConversationSummary,
       "",
@@ -9272,20 +9318,42 @@ function TextView({
     signal?: AbortSignal;
     displayText?: (text: string) => string;
   }) {
+    const requestMaterials =
+      agentTask === "outline"
+        ? prepareOutlineMaterialsForRequest(materials)
+        : materials;
+    const requestImages =
+      agentTask === "outline"
+        ? await prepareOutlineImagesForRequest(materials, images)
+        : images;
+    const requestBody = JSON.stringify({
+      view: "text",
+      agentTask,
+      message,
+      materials: requestMaterials,
+      images: requestImages,
+    });
+
+    if (
+      agentTask === "outline" &&
+      new TextEncoder().encode(requestBody).byteLength >
+        OUTLINE_REQUEST_MAX_BYTES
+    ) {
+      throw new Error("资料体积过大，请压缩或拆分资料后重试。");
+    }
+
     const response = await fetch("/api/zerlum-agent", {
       method: "POST",
       signal,
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        view: "text",
-        agentTask,
-        message,
-        materials,
-        images,
-      }),
+      body: requestBody,
     });
+
+    if (response.status === 413) {
+      throw new Error("资料体积过大，请压缩或拆分资料后重试。");
+    }
 
     if (!response.ok || !response.body) {
       const fallback = await response.text();
@@ -9463,10 +9531,15 @@ function TextView({
         images: canvasGeneratedImages,
       });
     } catch (error) {
-      const errorText = normalizeAgentErrorMessage(
-        error instanceof Error ? error.message : "",
-        "方案 Agent 连接失败，请稍后再试。",
-      );
+      const rawMessage = error instanceof Error ? error.message : "";
+      const errorText = /Failed to fetch|NetworkError|Load failed/i.test(
+        rawMessage,
+      )
+        ? "大纲请求未能发送。请压缩或拆分资料后重试；若资料较小，请检查网络。"
+        : normalizeAgentErrorMessage(
+            rawMessage,
+            "方案 Agent 连接失败，请稍后再试。",
+          );
       setDocumentMessages((current) =>
         current.map((item) =>
           item.id === assistantId

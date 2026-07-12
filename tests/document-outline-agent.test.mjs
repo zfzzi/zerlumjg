@@ -45,7 +45,7 @@ test("outline prompt stays concise, landscape-specific, and material-driven", ()
   assert.match(outlinePromptBlock, /【左侧项目简报】/);
   assert.match(outlinePromptBlock, /project\.brief\.goals/);
   assert.match(outlinePromptBlock, /project\.brief\.users/);
-  assert.match(outlinePromptBlock, /【文本交付区上传资料】/);
+  assert.match(outlinePromptBlock, /【已上传项目资料清单】/);
   assert.match(outlinePromptBlock, /【Zerlum Agent 有效对话】/);
   assert.match(outlinePromptBlock, /item\.role === "user" \? "用户" : "Zerlum Agent"/);
   assert.match(outlinePromptBlock, /【方案画布成果】/);
