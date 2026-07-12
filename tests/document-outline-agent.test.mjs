@@ -83,6 +83,50 @@ test("outline requires project evidence beyond the current instruction", () => {
   );
 });
 
+test("outline sends compact materials without complete file data URLs", () => {
+  assert.match(appSource, /const OUTLINE_MATERIAL_TEXT_LIMIT = 12_000;/);
+  assert.match(appSource, /function prepareOutlineMaterialsForRequest/);
+  assert.match(
+    appSource,
+    /\{\s*sourceDataUrl,\s*sourceText,\s*\.\.\.material\s*\}[\s\S]*sourceText: sourceText\?\.slice\(0, OUTLINE_MATERIAL_TEXT_LIMIT\)/,
+  );
+  assert.match(
+    requestDocumentAgentBlock,
+    /prepareOutlineMaterialsForRequest\(materials\)/,
+  );
+  assert.doesNotMatch(outlinePromptBlock, /sourceText\.slice\(0, 6000\)/);
+  assert.doesNotMatch(outlinePromptBlock, /【文本交付区上传资料】/);
+});
+
+test("outline compresses data images and rejects oversized JSON before fetch", () => {
+  assert.match(appSource, /const OUTLINE_DATA_IMAGE_LIMIT = 2;/);
+  assert.match(appSource, /const OUTLINE_IMAGE_MAX_BYTES = 600_000;/);
+  assert.match(appSource, /const OUTLINE_REQUEST_MAX_BYTES = 3_000_000;/);
+  assert.match(appSource, /async function prepareOutlineImagesForRequest/);
+  assert.match(
+    appSource,
+    /compressImageForAgentApi\([\s\S]*maxBytes: OUTLINE_IMAGE_MAX_BYTES/,
+  );
+  assert.match(
+    requestDocumentAgentBlock,
+    /new TextEncoder\(\)\.encode\(requestBody\)\.byteLength/,
+  );
+  assert.match(
+    requestDocumentAgentBlock,
+    /资料体积过大，请压缩或拆分资料后重试/,
+  );
+});
+
+test("outline surfaces actionable request-size and network errors", () => {
+  assert.match(requestDocumentAgentBlock, /response\.status === 413/);
+  assert.match(
+    requestDocumentAgentBlock,
+    /资料体积过大，请压缩或拆分资料后重试/,
+  );
+  assert.match(outlineSubmitBlock, /Failed to fetch/);
+  assert.match(outlineSubmitBlock, /若资料较小，请检查网络/);
+});
+
 test("outline proxy applies the same landscape delivery contract", () => {
   assert.match(outlineProxyBlock, /使用 Landscape Skill 组织景观设计方法、页面角色和质量检查。/);
   assert.match(outlineProxyBlock, /Landscape Skill 不能当作项目事实来源。/);

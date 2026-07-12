@@ -205,25 +205,14 @@ test("agent proxy converts content to Chat Completions parts for main agent", ()
   assert.match(agentProxyBlock, /text:\s*enrichedMessage/);
 });
 
-test("main agent streams OpenAI chat tokens while outline wraps non-streaming results", () => {
-  for (const backendSource of [source, apiServerSource]) {
-    assert.match(backendSource, /function extractOpenAiChatCompletionText/);
-  }
-
+test("main agent and outline stream OpenAI chat tokens", () => {
   for (const backendBlock of [agentProxyBlock, apiAgentHandlerBlock]) {
     assert.match(
       backendBlock,
-      /const streamOpenAiChat = view === "agent" && useOpenAiChat && !isDocumentOutputTask;/,
+      /const streamOpenAiChat = useOpenAiChat && !isDocumentOutputTask;/,
     );
     assert.match(backendBlock, /useOpenAiChat\s*\?\s*\{\s*model: agentModel,\s*stream: streamOpenAiChat,\s*messages:/);
-    const openAiChatResponseBlock = backendBlock.slice(
-      backendBlock.indexOf("if (useOpenAiChat && !streamOpenAiChat) {"),
-      backendBlock.indexOf("await pipeResponseBody"),
-    );
-
-    assert.match(openAiChatResponseBlock, /const upstreamText = await upstream\.text\(\);/);
-    assert.match(openAiChatResponseBlock, /extractOpenAiChatCompletionText\(JSON\.parse\(upstreamText\)\)/);
-    assert.match(openAiChatResponseBlock, /writeAgentTextEvent\(\s*response,\s*agentText/);
+    assert.match(backendBlock, /await pipeResponseBody\(upstream, response\)/);
   }
 });
 
